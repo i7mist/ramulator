@@ -1,0 +1,8 @@
+*.swp
+
+# Compiled Object files
+*.o
+
+# Compiled target executable files
+ramulator-dramtrace ramulator-cputrace
+

@@ -13,21 +13,20 @@
 #include "Refresh.h"
 #include "Request.h"
 #include "Scheduler.h"
+#include "Statistics.h"
 
 using namespace std;
+
 namespace ramulator
 {
 
 template <typename T>
 class Controller
 {
+protected:
+   ScalarStat reqCount;
+   ScalarStat latencySum;
 public:
-    /* Command trace for DRAMPower 3.1 */
-    string cmd_trace_prefix = "cmd-trace-";
-    vector<ofstream> cmd_trace_files;
-    bool record_cmd_trace = false;
-    /* Commands to stdout */
-    bool print_cmd_trace = false;
     /* Member Variables */
     long clk = 0;
     DRAM<T>* channel;
@@ -39,9 +38,9 @@ public:
 
     struct Queue {
         list<Request> q;
-        int max = 32;
-        int size() {return q.size();}
-    }; 
+        unsigned int max = 32;
+        unsigned int size() {return q.size();}
+    };
 
     Queue readq;  // queue for read requests
     Queue writeq;  // queue for write requests
@@ -51,20 +50,36 @@ public:
     bool write_mode = false;  // whether write requests should be prioritized over reads
     //long refreshed = 0;  // last time refresh requests were generated
 
+    /* Command trace for DRAMPower 3.1 */
+    string cmd_trace_prefix = "cmd-trace-";
+    vector<ofstream> cmd_trace_files;
+    bool record_cmd_trace = false;
+    /* Commands to stdout */
+    bool print_cmd_trace = false;
+
     /* Constructor */
     Controller(DRAM<T>* channel) :
         channel(channel),
         scheduler(new Scheduler<T>(this)),
         rowpolicy(new RowPolicy<T>(this)),
         rowtable(new RowTable<T>(this)),
-		refresh(new Refresh<T>(this))
+        refresh(new Refresh<T>(this)),
+        cmd_trace_files(channel->children.size())
     {
         if (record_cmd_trace){
             string prefix = cmd_trace_prefix + "chan-" + to_string(channel->id) + "-rank-";
             string suffix = ".cmdtrace";
-            for (int i = 0; i < channel->children.size(); i++)
-                cmd_trace_files.emplace_back(prefix + to_string(i) + suffix);
+            for (unsigned int i = 0; i < channel->children.size(); i++)
+                cmd_trace_files[i].open(prefix + to_string(i) + suffix);
         }
+
+        // regStats
+        reqCount.name("reqCount")
+                .desc("request count for chan-" + to_string(channel->id))
+                .precision(0);
+        latencySum.name("latencySum")
+                  .desc("end-to-end memory request latency sum for chan-" + to_string(channel->id));
+
     }
 
     ~Controller(){
@@ -98,12 +113,13 @@ public:
         queue.q.push_back(req);
         // shortcut for read requests, if a write to same addr exists
         // necessary for coherence
-        if (req.type == Request::Type::READ && find_if(writeq.q.begin(), writeq.q.end(), 
+        if (req.type == Request::Type::READ && find_if(writeq.q.begin(), writeq.q.end(),
                 [req](Request& wreq){ return req.addr == wreq.addr;}) != writeq.q.end()){
             req.depart = clk + 1;
             pending.push_back(req);
             readq.q.pop_back();
         }
+        reqCount++;
         return true;
     }
 
@@ -115,6 +131,8 @@ public:
         if (pending.size()) {
             Request& req = pending[0];
             if (req.depart <= clk) {
+                // FIXME update req.depart with clk
+                latencySum += req.depart - req.arrive;
                 req.callback(req);
                 pending.pop_front();
             }

@@ -3,6 +3,7 @@
 
 #include "DRAM.h"
 #include "Request.h"
+#include "Statistics.h"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -13,6 +14,7 @@
 #include <queue>
 
 using namespace std;
+
 namespace ramulator
 {
 
@@ -21,6 +23,9 @@ class SpeedyController
 // A FR-FCFS Open Row Controller, optimized for simulation speed.
 // Not For SALP-2
 {
+protected:
+   ScalarStat reqCount;
+   ScalarStat latencySum;
 private:
     class compair_depart_clk{
     public:
@@ -36,7 +41,7 @@ public:
     /* Commands to stdout */
     bool print_cmd_trace = false;
     /* Member Variables */
-    int queue_capacity = 32;
+    const unsigned int queue_capacity = 32;
     long clk = 0;
     DRAM<T>* channel;
 
@@ -63,12 +68,19 @@ public:
         if (record_cmd_trace){
             string prefix = cmd_trace_prefix + "chan-" + to_string(channel->id) + "-rank-";
             string suffix = ".cmdtrace";
-            for (int i = 0; i < channel->children.size(); i++)
+            for (unsigned int i = 0; i < channel->children.size(); i++)
                 cmd_trace_files.emplace_back(prefix + to_string(i) + suffix);
         }
         readq.reserve(queue_capacity);
         writeq.reserve(queue_capacity);
         otherq.reserve(queue_capacity);
+
+        // regStats
+        reqCount.name("reqCount")
+                .desc("request count for chan-" + to_string(channel->id))
+                .precision(0);
+        latencySum.name("latencySum")
+                  .desc("end-to-end memory request latency sum for chan-" + to_string(channel->id));
     }
 
     ~SpeedyController(){
@@ -100,6 +112,7 @@ public:
         long first_clk = channel->get_next(first_cmd, req.addr_vec.data());
         q.emplace_back(req, first_cmd, first_clk);
         push_heap(q.begin(), q.end(), compair_first_clk);;
+        reqCount++;
         return true;
     }
 
@@ -112,6 +125,7 @@ public:
             Request req = pending.top();
             if (req.depart <= clk) {
                 req.depart = clk; // actual depart clk
+                latencySum += req.depart - req.arrive;
                 req.callback(req);
                 pending.pop();
             }
@@ -136,12 +150,12 @@ public:
         /*** 3. Should we schedule writes? ***/
         if (!write_mode) {
             // yes -- write queue is almost full or read queue is empty
-            if (writeq.size() >= int(write_hi * queue_capacity) || readq.size() == 0)
+            if (writeq.size() >= (unsigned int)(write_hi * queue_capacity) || readq.size() == 0)
                 write_mode = true;
         }
         else {
             // no -- write queue is almost empty and read queue is not empty
-            if (writeq.size() <= int(write_low * queue_capacity) && readq.size() != 0)
+            if (writeq.size() <= (unsigned int)(write_low * queue_capacity) && readq.size() != 0)
                 write_mode = false;
         }
 

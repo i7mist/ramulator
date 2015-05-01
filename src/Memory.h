@@ -4,6 +4,7 @@
 #include "DRAM.h"
 #include "Request.h"
 #include "Controller.h"
+#include "Statistics.h"
 #include <vector>
 #include <functional>
 #include <cmath>
@@ -11,6 +12,7 @@
 #include <tuple>
 
 using namespace std;
+
 namespace ramulator
 {
 
@@ -27,6 +29,8 @@ public:
 template <class T, template<typename> class Controller = Controller >
 class Memory : public MemoryBase
 {
+protected:
+   ScalarStat totReqCount;
 public:
     enum class Type {
         ChRaBaRoCo,
@@ -37,11 +41,11 @@ public:
     vector<Controller<T>*> ctrls;
     T * spec;
     vector<int> addr_bits;
-    
+
     int tx_bits;
 
     Memory(vector<Controller<T>*> ctrls)
-        : ctrls(ctrls), 
+        : ctrls(ctrls),
           spec(ctrls[0]->channel->spec),
           addr_bits(int(T::Level::MAX))
     {
@@ -52,15 +56,29 @@ public:
         // validate size of one transaction
         int tx = (spec->prefetch_size * spec->channel_width / 8);
         tx_bits = calc_log2(tx);
-        assert((1<<tx_bits) == tx);    
-        // If hi address bits will not be assigned to Rows 
+        assert((1<<tx_bits) == tx);
+        // If hi address bits will not be assigned to Rows
         // then the chips must not be LPDDRx 6Gb, 12Gb etc.
         if (type != Type::RoBaRaCoCh && spec->standard_name.substr(0, 5) == "LPDDR")
-            assert((sz[int(T::Level::Row)] & (sz[int(T::Level::Row)] - 1)) == 0); 
+            assert((sz[int(T::Level::Row)] & (sz[int(T::Level::Row)] - 1)) == 0);
 
-        for (int lev = 0; lev < addr_bits.size(); lev++)
-            addr_bits[lev] = calc_log2(sz[lev]);
+        // The number of channels and ranks are set when a spec class is
+        // initialized. However the initialization does not update the channel
+        // and rank count in org_entry.count (*sz), and it's not supposed to.
+        for (unsigned int lev = 0; lev < addr_bits.size(); lev++) {
+            if (lev == int(T::Level::Channel))
+              addr_bits[lev] = calc_log2(ctrls.size());
+            else if (lev == int(T::Level::Rank))
+              addr_bits[lev] = calc_log2(ctrls[0]->channel->children.size());
+            else
+              addr_bits[lev] = calc_log2(sz[lev]);
+        }
+
         addr_bits[int(T::Level::MAX) - 1] -= calc_log2(spec->prefetch_size);
+
+        totReqCount.name("totReqCount")
+                   .desc("memory request Count.")
+                   .precision(0);
     }
 
     ~Memory()
@@ -84,9 +102,10 @@ public:
     bool send(Request req)
     {
         req.addr_vec.resize(addr_bits.size());
-        long addr = req.addr;
+//         long addr = req.addr;
+         long addr = req.addr & (~((1 << tx_bits) - 1));
         assert(slice_lower_bits(addr, tx_bits) == 0); // check address alignment
-        
+
         switch(int(type)){
             case int(Type::ChRaBaRoCo):
                 for (int i = addr_bits.size() - 1; i >= 0; i--)
@@ -108,7 +127,13 @@ public:
         // assert(addr == 0); // check address is within range
 
         // dispatch to the right channel
-        return ctrls[req.addr_vec[0]]->enqueue(req);
+        bool success = ctrls[req.addr_vec[0]]->enqueue(req);
+        if (success) {
+          totReqCount++;
+          return true;
+        } else {
+          return false;
+        }
     }
 
     int pending_requests()
@@ -127,7 +152,7 @@ private:
             n ++;
         return n;
     }
-    int slice_lower_bits(long& addr, int bits) 
+    int slice_lower_bits(long& addr, int bits)
     {
         int lbits = addr & ((1<<bits) - 1);
         addr >>= bits;

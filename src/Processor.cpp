@@ -4,19 +4,110 @@
 using namespace std;
 using namespace ramulator;
 
-Processor::Processor(const char* trace_fname, function<bool(Request)> send)
-    : send(send), callback(bind(&Processor::receive, this, placeholders::_1)), trace(trace_fname)
+Processor::Processor(vector<const char*> trace_list,
+    function<bool(Request)> send_memory,
+    bool early_exit)
+    :ipcs(trace_list.size(), -1), early_exit(early_exit),
+     cachesys(new CacheSystem(send_memory)),
+     llc(l3_size, l3_assoc, l3_blocksz,
+         mshr_per_bank * trace_list.size(),
+         Cache::Level::L3, cachesys) {
+  assert(cachesys != nullptr);
+  int tracenum = trace_list.size();
+  assert(tracenum > 0);
+  printf("tracenum: %d\n", tracenum);
+  for (int i = 0 ; i < tracenum ; ++i) {
+    printf("trace_list[%d]: %s\n", i, trace_list[i]);
+  }
+  if (no_shared_cache) {
+    for (int i = 0 ; i < tracenum ; ++i) {
+      cores.emplace_back(
+          i, trace_list[i], send_memory, nullptr);
+    }
+  } else {
+    for (int i = 0 ; i < tracenum ; ++i) {
+      cores.emplace_back(i, trace_list[i],
+          std::bind(&Cache::send, &llc, std::placeholders::_1),
+          &llc);
+    }
+  }
+  for (int i = 0 ; i < tracenum ; ++i) {
+    cores[i].callback = std::bind(&Core::receive, &cores[i],
+        placeholders::_1);
+  }
+}
+
+void Processor::tick() {
+  if (!no_shared_cache) {
+    cachesys->tick();
+  }
+  for (auto& core : cores) {
+    core.tick();
+  }
+}
+
+bool Processor::finished() {
+  if (early_exit) {
+    for (unsigned int i = 0 ; i < cores.size(); ++i) {
+      if (cores[i].finished()) {
+        for (unsigned int j = 0 ; j < cores.size() ; ++j) {
+          ipc += cores[j].calc_ipc();
+        }
+        return true;
+      }
+    }
+    return false;
+  } else {
+    for (unsigned int i = 0 ; i < cores.size(); ++i) {
+      if (!cores[i].finished()) {
+        return false;
+      }
+      if (ipcs[i] < 0) {
+        ipcs[i] = cores[i].calc_ipc();
+        ipc += ipcs[i];
+      }
+    }
+    return true;
+  }
+}
+
+Core::Core(int coreid, const char* trace_fname,
+    function<bool(Request)> send_next, Cache* llc)
+    : id(coreid), llc(llc), trace(trace_fname)
 {
-    more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
+  // Build cache hierarchy
+  if (no_core_caches) {
+    send = send_next;
+  } else {
+    // L2 caches[0]
+    caches.push_back(Cache(
+        l2_size, l2_assoc, l2_blocksz, l2_mshr_num,
+        Cache::Level::L2, llc->cachesys));
+    // L1 caches[1]
+    caches.push_back(Cache(
+        l1_size, l1_assoc, l1_blocksz, l1_mshr_num,
+        Cache::Level::L1, llc->cachesys));
+    send = bind(&Cache::send, &caches[1], placeholders::_1);
+    caches[0].concatlower(llc);
+    caches[1].concatlower(&caches[0]);
+  }
+  if (no_core_caches) {
+    more_reqs = trace.get_filtered_request(
+        bubble_cnt, req_addr, req_type);
+  } else {
+    more_reqs = trace.get_unfiltered_request(
+        bubble_cnt, req_addr, req_type);
+  }
 }
 
 
-double Processor::calc_ipc()
+double Core::calc_ipc()
 {
+    printf("[%d]retired: %ld, clk, %ld\n", id, retired, clk);
     return (double) retired / clk;
 }
 
-void Processor::tick() 
+void Core::tick()
 {
     clk++;
 
@@ -42,11 +133,7 @@ void Processor::tick()
         Request req(req_addr, req_type, callback);
         if (!send(req)) return;
 
-        //cout << "Inserted: " << clk << "\n";
-
         window.insert(false, req_addr);
-        more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
-        return;
     }
     else {
         // write request
@@ -55,16 +142,25 @@ void Processor::tick()
         if (!send(req)) return;
     }
 
-    more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
+    if (no_core_caches) {
+      more_reqs = trace.get_filtered_request(
+          bubble_cnt, req_addr, req_type);
+    } else {
+      more_reqs = trace.get_unfiltered_request(
+          bubble_cnt, req_addr, req_type);
+    }
 }
 
-bool Processor::finished()
+bool Core::finished()
 {
     return !more_reqs && window.is_empty();
 }
-void Processor::receive(Request& req) 
+void Core::receive(Request& req)
 {
-    window.set_ready(req.addr);
+    window.set_ready(req.addr, ~(l1_blocksz - 1l));
+    if (llc != nullptr) {
+      llc->callback(req);
+    }
 }
 
 
@@ -99,7 +195,7 @@ long Window::retire()
 
     int retired = 0;
     while (load > 0 && retired < ipc) {
-        if (!ready_list.at(tail)) 
+        if (!ready_list.at(tail))
             break;
 
         tail = (tail + 1) % depth;
@@ -111,13 +207,13 @@ long Window::retire()
 }
 
 
-void Window::set_ready(long addr)
+void Window::set_ready(long addr, int mask)
 {
     if (load == 0) return;
 
     for (int i = 0; i < load; i++) {
         int index = (tail + i) % depth;
-        if (addr_list.at(index) != addr)
+        if ((addr_list.at(index) & mask) != (addr & mask))
             continue;
         ready_list.at(index) = true;
     }
@@ -126,15 +222,36 @@ void Window::set_ready(long addr)
 
 
 Trace::Trace(const char* trace_fname) : file(trace_fname)
-{ 
+{
     if (!file.good()) {
         std::cerr << "Bad trace file: " << trace_fname << std::endl;
         exit(1);
     }
 }
 
+bool Trace::get_unfiltered_request(long& bubble_cnt, long& req_addr, Request::Type& req_type)
+{
+    string line;
+    getline(file, line);
+    if (file.eof()) {
+        return false;
+    }
+    size_t pos, end;
+    bubble_cnt = std::stoul(line, &pos, 10);
+    pos = line.find_first_not_of(' ', pos+1);
+    req_addr = std::stoul(line.substr(pos), &end, 0);
 
-bool Trace::get_request(long& bubble_cnt, long& req_addr, Request::Type& req_type)
+    pos = line.find_first_not_of(' ', pos+end);
+
+    if (pos == string::npos || line.substr(pos)[0] == 'R')
+        req_type = Request::Type::READ;
+    else if (line.substr(pos)[0] == 'W')
+        req_type = Request::Type::WRITE;
+    else assert(false);
+    return true;
+}
+
+bool Trace::get_filtered_request(long& bubble_cnt, long& req_addr, Request::Type& req_type)
 {
     static bool has_write = false;
     static long write_addr;
@@ -152,18 +269,15 @@ bool Trace::get_request(long& bubble_cnt, long& req_addr, Request::Type& req_typ
     if (file.eof() || line.size() == 0) {
         file.clear();
         file.seekg(0);
-        // getline(file, line);
         line_num = 0;
         return false;
     }
 
     size_t pos, end;
     bubble_cnt = std::stoul(line, &pos, 10);
-    //std::cout << "Bubble_Count: " << bubble_cnt << std::endl;
 
     pos = line.find_first_not_of(' ', pos+1);
     req_addr = stoul(line.substr(pos), &end, 0);
-    //std::cout << "Req_Addr: " << req_addr << std::endl;
     req_type = Request::Type::READ;
 
     pos = line.find_first_not_of(' ', pos+end);
@@ -174,7 +288,7 @@ bool Trace::get_request(long& bubble_cnt, long& req_addr, Request::Type& req_typ
     return true;
 }
 
-bool Trace::get_request(long& req_addr, Request::Type& req_type)
+bool Trace::get_dramtrace_request(long& req_addr, Request::Type& req_type)
 {
     string line;
     getline(file, line);

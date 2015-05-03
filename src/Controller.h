@@ -19,6 +19,12 @@ namespace ramulator
 {
 
 template <typename T>
+class Scheduler;
+
+template <typename T>
+class RowPolicy;
+
+template <typename T>
 class Controller
 {
 public:
@@ -52,10 +58,12 @@ public:
     //long refreshed = 0;  // last time refresh requests were generated
 
     /* Constructor */
-    Controller(DRAM<T>* channel) :
+    Controller(DRAM<T>* channel,
+        SchedulerType sched_type = SchedulerType::FRFCFS,
+        RowPolicyType rowpolicy_type = RowPolicyType::Opened) :
         channel(channel),
-        scheduler(new Scheduler<T>(this)),
-        rowpolicy(new RowPolicy<T>(this)),
+        scheduler(new Scheduler<T>(this/*, sched_type*/)),
+        rowpolicy(new RowPolicy<T>(this/*, rowpolicy_type*/)),
         rowtable(new RowTable<T>(this)),
 		refresh(new Refresh<T>(this))
     {

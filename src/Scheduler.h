@@ -1,6 +1,7 @@
 #ifndef __SCHEDULER_H
 #define __SCHEDULER_H
 
+#include "DDR3.h"
 #include "DRAM.h"
 #include "Request.h"
 #include "Controller.h"
@@ -17,19 +18,27 @@ namespace ramulator
 template <typename T>
 class Controller;
 
+enum class SchedulerType {
+    FCFS, FRFCFS, FRFCFS_Cap, MAX
+};
+
 template <typename T>
 class Scheduler
 {
 public:
     Controller<T>* ctrl;
 
-    enum class Type {
-        FCFS, FRFCFS, FRFCFS_Cap, MAX
-    } type = Type::FRFCFS;
+    SchedulerType type = SchedulerType::FRFCFS;
 
     long cap = 16;
 
     Scheduler(Controller<T>* ctrl) : ctrl(ctrl) {}
+
+    Scheduler(Controller<T>* ctrl, SchedulerType type_) : ctrl(ctrl) {
+      if (type_ != SchedulerType::MAX) {
+        type = type_;
+      } 
+    }
 
     list<Request>::iterator get_head(list<Request>& q)
     {
@@ -45,7 +54,7 @@ public:
 
 private:
     typedef list<Request>::iterator ReqIter;
-    function<ReqIter(ReqIter, ReqIter)> compare[int(Type::MAX)] = {
+    function<ReqIter(ReqIter, ReqIter)> compare[int(SchedulerType::MAX)] = {
         // FCFS
         [this] (ReqIter req1, ReqIter req2) { 
             if (req1->arrive <= req2->arrive) return req1;
@@ -82,6 +91,9 @@ private:
     };
 };
 
+enum class RowPolicyType {
+    Closed, Opened, Timeout, MAX
+};
 
 template <typename T>
 class RowPolicy
@@ -89,13 +101,16 @@ class RowPolicy
 public:
     Controller<T>* ctrl;
 
-    enum class Type {
-        Closed, Opened, Timeout, MAX
-    } type = Type::Opened;
+    RowPolicyType type = RowPolicyType::Opened;
 
     int timeout = 50;
 
     RowPolicy(Controller<T>* ctrl) : ctrl(ctrl) {}
+    RowPolicy(Controller<T>* ctrl, RowPolicyType type_) : ctrl(ctrl) {
+      if (type_ != RowPolicyType::MAX) {
+        type = type_;
+      }
+    }
 
     vector<int> get_victim(typename T::Command cmd)
     {
@@ -103,7 +118,7 @@ public:
     }
 
 private:
-    function<vector<int>(typename T::Command)> policy[int(Type::MAX)] = {
+    function<vector<int>(typename T::Command)> policy[int(RowPolicyType::MAX)] = {
         // Closed
         [this] (typename T::Command cmd) -> vector<int> { 
             for (auto& kv : this->ctrl->rowtable->table) {
@@ -174,15 +189,15 @@ public:
             // we are closing one or more rows -- remove their entries
         	int n_rm = 0;
         	int scope = int(spec->scope[int(cmd)]);
-			for (auto it = table.begin(); it != table.end();) {
-				if (equal(begin, begin + scope + 1, it->first.begin())) {
-					n_rm++;
-					it = table.erase(it);
-				}
-				else
-					it++;
-			}
-			assert(n_rm > 0);
+          for (auto it = table.begin(); it != table.end();) {
+            if (equal(begin, begin + scope + 1, it->first.begin())) {
+              n_rm++;
+              it = table.erase(it);
+            }
+            else
+              it++;
+          }
+          assert(n_rm > 0);
         } /* closing */
     }
 

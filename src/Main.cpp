@@ -120,7 +120,10 @@ double run_simulation(T *spec, const char *file, int chan, int rank, int cpu_tic
         dram->id = c;
         for (int r = 0; r < rank; r++)
             dram->insert(new DRAM<T>(spec, T::Level::Rank));
-        Controller<T> *ctrl = new Controller<T>(dram);
+        // The default scheduler is FRFCFS, default row policy is open-row.
+        // Use MAX to keep the default settings.
+        Controller<T> *ctrl = new Controller<T>(dram,
+            SchedulerType::MAX, RowPolicyType::MAX);
         ctrls.push_back(ctrl);
     }
     Memory<T, Controller> memory(ctrls);

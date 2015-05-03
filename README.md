@@ -66,7 +66,7 @@ library (e.g., `libc++`).
 
         $ cd ramulator
         $ make -j ramulator-cputrace
-        $ ./ramulator-dramtrace cpu.trace  # Report normalized IPC for all supported standards (baseline: DDR3)
+        $ ./ramulator-cputrace cpu.trace  # Report normalized IPC for all supported standards (baseline: DDR3)
         DDR3: 1.00000
         DDR4: 1.13072
         LPDDR3: 0.79724

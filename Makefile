@@ -13,6 +13,8 @@ ramulator-dramtrace: $(MAIN) $(OBJ)
 ramulator-cputrace: $(MAIN) $(OBJ)
 	$(CXX) $(CXXFLAGS) -DRAMULATOR_CPUTRACE -o $@ $^
 
+.PHONY: clean all
+
 clean:
 	rm -f src/*.o ramulator-dramtrace ramulator-cputrace
 

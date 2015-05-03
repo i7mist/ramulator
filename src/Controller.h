@@ -62,8 +62,8 @@ public:
         SchedulerType sched_type = SchedulerType::FRFCFS,
         RowPolicyType rowpolicy_type = RowPolicyType::Opened) :
         channel(channel),
-        scheduler(new Scheduler<T>(this/*, sched_type*/)),
-        rowpolicy(new RowPolicy<T>(this/*, rowpolicy_type*/)),
+        scheduler(new Scheduler<T>(this, sched_type)),
+        rowpolicy(new RowPolicy<T>(this, rowpolicy_type)),
         rowtable(new RowTable<T>(this)),
 		refresh(new Refresh<T>(this))
     {

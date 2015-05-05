@@ -4,5 +4,6 @@
 *.o
 
 # Compiled target executable files
-ramulator-dramtrace ramulator-cputrace
+ramulator-dramtrace
+ramulator-cputrace
 

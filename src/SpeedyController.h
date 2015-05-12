@@ -87,6 +87,14 @@ public:
         if (queue_capacity == q.size())
             return false;
 
+        // Row hit happens iff there isn't ACT issued.
+        // Row conflicts happens iff there is PRE issued.
+        // So the default value of hit and conflict is set below.
+        if (req.type == Request::Type::READ || req.type == Request::Type::WRITE) {
+          req.res.hit = true;
+          req.res.conflict = false;
+        }
+
         req.arrive = clk;
         if (req.type == Request::Type::READ){
             for (auto& info : writeq)
@@ -193,6 +201,12 @@ private:
         make_heap(q.begin(), q.end(), compair_first_clk);
     }
 
+    void update_request(Request& req, int readqlen, int writeqlen, int otherqlen) {
+      req.res.readq_len = readqlen;
+      req.res.writeq_len = writeqlen;
+      req.res.otherq_len = otherqlen;
+    }
+
     void schedule(request_queue& q){
         if (q.empty()) return;
 
@@ -202,12 +216,26 @@ private:
 
         if (first_clk > clk) return;
 
+        // Row conflict happens iff there is command PRE issued.
+        // Row hit happens iff there isn't command ACT issued.
+        if (req.type == Request::Type::READ || req.type == Request::Type::WRITE) {
+          if (first_cmd == T::Command::PRE) {
+            req.res.conflict = true;
+          }
+          if (first_cmd == T::Command::ACT) {
+            req.res.hit = false;
+          }
+        }
         issue_cmd(first_cmd, req.addr_vec.data());
 
+        // The request is completed.
         if (first_cmd == channel->spec->translate[int(req.type)]){
+            update_request(req, readq.size(), writeq.size(), otherq.size());
             if (req.type == Request::Type::READ) {
                 req.depart = clk + channel->spec->read_latency;
                 pending.push(req);
+            } else {
+              req.callback(req);
             }
             pop_heap(q.begin(), q.end(), compair_first_clk);
             q.pop_back();

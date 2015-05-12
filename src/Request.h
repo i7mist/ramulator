@@ -37,6 +37,16 @@ public:
         : addr_vec(addr_vec), type(type), callback(callback) {}
 
     Request(){}
+
+    struct Result {
+      bool hit = true;
+      bool conflict = false;
+      int latency;
+      int readq_len;
+      int writeq_len;
+      int otherq_len;
+    } res;
+
 };
 
 } /*namespace ramulator*/

@@ -102,6 +102,14 @@ public:
         if (queue.max == queue.size())
             return false;
 
+        // Row hit happens iff there isn't ACT issued.
+        // Row conflicts happens iff there is PRE issued.
+        // So the default value of hit and conflict is set below.
+        if (req.type == Request::Type::READ || req.type == Request::Type::WRITE) {
+          req.res.hit = true;
+          req.res.conflict = false;
+        }
+
         req.arrive = clk;
         queue.q.push_back(req);
         // shortcut for read requests, if a write to same addr exists
@@ -161,16 +169,28 @@ public:
 
         // issue command on behalf of request
         auto cmd = get_first_cmd(req);
+        // Row conflict happens iff there is command PRE issued.
+        // Row hit happens iff there isn't command ACT issued.
+        if (cmd == T::Command::PRE) {
+          req->res.conflict = true;
+        }
+        if (cmd == T::Command::ACT) {
+          req->res.hit = false;
+        }
         issue_cmd(cmd, get_addr_vec(cmd, req));
 
         // check whether this is the last command (which finishes the request)
         if (cmd != channel->spec->translate[int(req->type)])
             return;
 
+        rowtable->updateReq(req, readq.size(), writeq.size(), otherq.size());
+
         // set a future completion time for read requests
         if (req->type == Request::Type::READ) {
             req->depart = clk + channel->spec->read_latency;
             pending.push_back(*req);
+        } else {
+          req->callback(*req);
         }
 
         // remove request from queue

@@ -201,6 +201,14 @@ public:
         } /* closing */
     }
 
+    void updateReq(list<Request>::iterator req, int readqlen, int writeqlen, int otherqlen) {
+      auto addr_vec = req->addr_vec;
+      req->res.latency = req->depart - req->arrive;
+      req->res.readq_len = readqlen;
+      req->res.writeq_len = writeqlen;
+      req->res.otherq_len = otherqlen;
+    }
+
     int get_hits(vector<int>& addr_vec)
     {
         auto begin = addr_vec.begin();

@@ -202,12 +202,16 @@ private:
 
         if (first_clk > clk) return;
 
+        req.add_command(int(first_cmd), clk);
         issue_cmd(first_cmd, req.addr_vec.data());
 
+        // Request is finished.
         if (first_cmd == channel->spec->translate[int(req.type)]){
             if (req.type == Request::Type::READ) {
                 req.depart = clk + channel->spec->read_latency;
                 pending.push(req);
+            } else if (req.type == Request::Type::WRITE) {
+              req.callback(req);
             }
             pop_heap(q.begin(), q.end(), compair_first_clk);
             q.pop_back();

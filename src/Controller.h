@@ -161,6 +161,7 @@ public:
 
         // issue command on behalf of request
         auto cmd = get_first_cmd(req);
+        req->add_command(int(cmd), clk);
         issue_cmd(cmd, get_addr_vec(cmd, req));
 
         // check whether this is the last command (which finishes the request)
@@ -171,6 +172,8 @@ public:
         if (req->type == Request::Type::READ) {
             req->depart = clk + channel->spec->read_latency;
             pending.push_back(*req);
+        } else if (req->type == Request::Type::WRITE) {
+          req->callback(*req);
         }
 
         // remove request from queue

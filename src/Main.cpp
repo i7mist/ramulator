@@ -42,17 +42,17 @@ int main (int argc, char** argv)
 
     /* initialize DRAM system */
     DDR3* ddr3 = new DDR3(DDR3::Org::DDR3_2Gb_x8, DDR3::Speed::DDR3_1600K);
-    vector<SpeedyController<DDR3>*> ctrls;
+    vector<Controller<DDR3>*> ctrls;
     for (int c = 0; c < C; c++) {
         DRAM<DDR3>* channel = new DRAM<DDR3>(ddr3, DDR3::Level::Channel);
         channel->id = c;
         for (int r = 0; r < R; r++)
             channel->insert(new DRAM<DDR3>(ddr3, DDR3::Level::Rank));
 
-        SpeedyController<DDR3>* ctrl = new SpeedyController<DDR3>(channel);
+        Controller<DDR3>* ctrl = new Controller<DDR3>(channel);
         ctrls.push_back(ctrl);
     }
-    Memory<DDR3, SpeedyController> memory(ctrls);
+    Memory<DDR3, Controller> memory(ctrls);
 
     /* initialize DRAM trace */
     Trace trace(argv[1]);
@@ -63,9 +63,26 @@ int main (int argc, char** argv)
     long addr = 0;
     Request::Type type = Request::Type::READ;
     map<int, int> latencies;
-    auto read_complete = [&latencies](Request& r){latencies[r.depart - r.arrive]++;};
+    int rowhit = 0 , rowconflict = 0;
+    auto req_complete = [&latencies, &rowhit, &rowconflict](Request& r){
+      latencies[r.depart - r.arrive]++;
+      if (r.type == Request::Type::READ || r.type == Request::Type::WRITE) {
+        bool hit = true;
+        bool conflict = false;
+        for (int i = 0 ; i < r.cmds.size() ; ++i) {
+          if (r.cmds[i].type == int(DDR3::Command::ACT)) {
+            hit = false;
+          }
+          else if (r.cmds[i].type == int(DDR3::Command::PRE)) {
+            conflict = true;
+          }
+        }
+        rowhit += hit ? 1 : 0;
+        rowconflict += conflict ? 1 : 0;
+      }
+    };
 
-    Request req(addr, type, read_complete);
+    Request req(addr, type, req_complete);
 
     while (!end || memory.pending_requests()){
         if (!end && !stall){
@@ -91,8 +108,9 @@ int main (int argc, char** argv)
     double rbw = 64.0 * reads / 1024 / 1024 / 1024 / (t / 1e9);
     double wbw = 64.0 * writes / 1024 / 1024 / 1024 / (t / 1e9);
 
-    printf("Simulation done %d clocks [%.3lfns], %d reads [%.3lf GB/s], %d writes [%.3lf GB/s]\n",
-        clks, t, reads, rbw, writes, wbw);
+    printf("Simulation done %d clocks [%.3lfns], %d reads [%.3lf GB/s], %d writes [%.3lf GB/s], "
+        "rowhit %d, rowconflict %d\n",
+        clks, t, reads, rbw, writes, wbw, rowhit, rowconflict);
 
     /* histogram of read latencies */
     // long total_latency = 0;

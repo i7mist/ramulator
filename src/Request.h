@@ -38,10 +38,12 @@ public:
     long arrive;
     long depart;
     function<void(Request&)> callback; // call back with more info
+    function<void(Request&)> stat_callback; // callback for statistics
     vector<CommandInfo> cmds;
 
-    Request(long addr, Type type, function<void(Request&)> callback)
-        : addr(addr), type(type), callback(callback) {}
+    Request(long addr, Type type, function<void(Request&)> callback,
+        function<void(Request&)> stat_callback)
+        : addr(addr), type(type), callback(callback), stat_callback(stat_callback) {}
 
     Request(vector<int>& addr_vec, Type type, function<void(Request&)> callback)
         : addr_vec(addr_vec), type(type), callback(callback) {}

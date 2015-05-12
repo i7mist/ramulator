@@ -3,6 +3,7 @@
 #include "SpeedyController.h"
 #include "Memory.h"
 #include "DRAM.h"
+#include "Statistics.h"
 #include <cstdio>
 #include <cstdlib>
 #include <stdlib.h>
@@ -62,27 +63,9 @@ int main (int argc, char** argv)
     int reads = 0, writes = 0, clks = 0;
     long addr = 0;
     Request::Type type = Request::Type::READ;
-    map<int, int> latencies;
-    int rowhit = 0 , rowconflict = 0;
-    auto req_complete = [&latencies, &rowhit, &rowconflict](Request& r){
-      latencies[r.depart - r.arrive]++;
-      if (r.type == Request::Type::READ || r.type == Request::Type::WRITE) {
-        bool hit = true;
-        bool conflict = false;
-        for (int i = 0 ; i < r.cmds.size() ; ++i) {
-          if (r.cmds[i].type == int(DDR3::Command::ACT)) {
-            hit = false;
-          }
-          else if (r.cmds[i].type == int(DDR3::Command::PRE)) {
-            conflict = true;
-          }
-        }
-        rowhit += hit ? 1 : 0;
-        rowconflict += conflict ? 1 : 0;
-      }
-    };
+    Statistics<DDR3>* stat = new Statistics<DDR3>(); 
 
-    Request req(addr, type, req_complete);
+    Request req(addr, type, [](Request& r){}, stat->callback);
 
     while (!end || memory.pending_requests()){
         if (!end && !stall){
@@ -110,7 +93,7 @@ int main (int argc, char** argv)
 
     printf("Simulation done %d clocks [%.3lfns], %d reads [%.3lf GB/s], %d writes [%.3lf GB/s], "
         "rowhit %d, rowconflict %d\n",
-        clks, t, reads, rbw, writes, wbw, rowhit, rowconflict);
+        clks, t, reads, rbw, writes, wbw, stat->get_rowhit(), stat->get_rowconflict());
 
     /* histogram of read latencies */
     // long total_latency = 0;
@@ -146,7 +129,8 @@ double run_simulation(T *spec, const char *file, int chan, int rank, int cpu_tic
     }
     Memory<T, Controller> memory(ctrls);
     auto send = bind(&Memory<T, Controller>::send, &memory, placeholders::_1);
-    Processor proc(file, send);
+    Statistics<T>* stat = new Statistics<T>(); 
+    Processor proc(file, send, stat->callback);
     for (long i = 0; ; i++) {
         // if (i % 100000000 == 0) printf("%ld clocks\n", i);
         proc.tick();

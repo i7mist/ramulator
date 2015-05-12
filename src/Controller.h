@@ -124,6 +124,7 @@ public:
             Request& req = pending[0];
             if (req.depart <= clk) {
                 req.callback(req);
+                req.stat_callback(req);
                 pending.pop_front();
             }
         }
@@ -174,6 +175,7 @@ public:
             pending.push_back(*req);
         } else if (req->type == Request::Type::WRITE) {
           req->callback(*req);
+          req->stat_callback(*req);
         }
 
         // remove request from queue

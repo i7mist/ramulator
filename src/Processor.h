@@ -54,12 +54,13 @@ public:
     long retired = 0;
     function<bool(Request)> send;
 
-    Processor(const char* trace_fname, function<bool(Request)> send);
+    Processor(const char* trace_fname, function<bool(Request)> send, function<void(Request&)> stat_callback);
     void tick();
     void receive(Request& req);
     double calc_ipc();
     bool finished();
     function<void(Request&)> callback; 
+    function<void(Request&)> stat_callback;
 
 private:
     Trace trace;

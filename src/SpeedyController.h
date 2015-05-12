@@ -113,6 +113,7 @@ public:
             if (req.depart <= clk) {
                 req.depart = clk; // actual depart clk
                 req.callback(req);
+                req.stat_callback(req);
                 pending.pop();
             }
         }
@@ -212,6 +213,7 @@ private:
                 pending.push(req);
             } else if (req.type == Request::Type::WRITE) {
               req.callback(req);
+              req.stat_callback(req);
             }
             pop_heap(q.begin(), q.end(), compair_first_clk);
             q.pop_back();

@@ -4,8 +4,8 @@
 using namespace std;
 using namespace ramulator;
 
-Processor::Processor(const char* trace_fname, function<bool(Request)> send)
-    : send(send), callback(bind(&Processor::receive, this, placeholders::_1)), trace(trace_fname)
+Processor::Processor(const char* trace_fname, function<bool(Request)> send, function<void(Request&)> stat_callback)
+    : trace(trace_fname), send(send), callback(bind(&Processor::receive, this, placeholders::_1)), stat_callback(stat_callback)
 {
     more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
 }
@@ -39,7 +39,7 @@ void Processor::tick()
         if (inserted == window.ipc) return;
         if (window.is_full()) return;
 
-        Request req(req_addr, req_type, callback);
+        Request req(req_addr, req_type, callback, stat_callback);
         if (!send(req)) return;
 
         //cout << "Inserted: " << clk << "\n";
@@ -51,7 +51,7 @@ void Processor::tick()
     else {
         // write request
         assert(req_type == Request::Type::WRITE);
-        Request req(req_addr, req_type, callback);
+        Request req(req_addr, req_type, callback, stat_callback);
         if (!send(req)) return;
     }
 

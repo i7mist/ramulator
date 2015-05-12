@@ -183,14 +183,16 @@ public:
         if (cmd != channel->spec->translate[int(req->type)])
             return;
 
-        rowtable->updateReq(req, readq.size(), writeq.size(), otherq.size());
+        // rowtable->updateReq(req, readq.size(), writeq.size(), otherq.size());
 
         // set a future completion time for read requests
         if (req->type == Request::Type::READ) {
             req->depart = clk + channel->spec->read_latency;
             pending.push_back(*req);
         } else {
-          req->callback(*req);
+          if (req->type == Request::Type::WRITE) {
+            req->callback(*req);
+          }
         }
 
         // remove request from queue

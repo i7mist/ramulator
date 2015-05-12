@@ -202,6 +202,7 @@ private:
     }
 
     void update_request(Request& req, int readqlen, int writeqlen, int otherqlen) {
+      req.res.latency = req.depart - req.arrive;
       req.res.readq_len = readqlen;
       req.res.writeq_len = writeqlen;
       req.res.otherq_len = otherqlen;
@@ -235,7 +236,9 @@ private:
                 req.depart = clk + channel->spec->read_latency;
                 pending.push(req);
             } else {
-              req.callback(req);
+              if (req.type == Request::Type::WRITE) {
+                req.callback(req);
+              }
             }
             pop_heap(q.begin(), q.end(), compair_first_clk);
             q.pop_back();

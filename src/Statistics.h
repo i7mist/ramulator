@@ -3,6 +3,8 @@
 
 #include "Request.h"
 
+namespace ramulator {
+
 template <typename T>
 class Statistics {
  public: 
@@ -34,9 +36,11 @@ class Statistics {
   int get_rowhit() {return rowhit;}
   int get_rowconflict() {return rowconflict;}
  private:
-  map<int, int> latencies;
+  std::map<int, int> latencies;
   int rowhit = 0;
   int rowconflict = 0;
 };
+
+}
 
 #endif

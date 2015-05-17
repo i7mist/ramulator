@@ -212,7 +212,6 @@ private:
                 req.depart = clk + channel->spec->read_latency;
                 pending.push(req);
             } else if (req.type == Request::Type::WRITE) {
-              req.callback(req);
               req.stat_callback(req);
             }
             pop_heap(q.begin(), q.end(), compair_first_clk);

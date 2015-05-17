@@ -174,7 +174,6 @@ public:
             req->depart = clk + channel->spec->read_latency;
             pending.push_back(*req);
         } else if (req->type == Request::Type::WRITE) {
-          req->callback(*req);
           req->stat_callback(*req);
         }
 

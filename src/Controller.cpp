@@ -58,6 +58,7 @@ void Controller<TLDRAM>::tick(){
         Request& req = pending[0];
         if (req.depart <= clk) {
             req.callback(req);
+            req.stat_callback(req);
             pending.pop_front();
         }
     }
@@ -110,6 +111,10 @@ void Controller<TLDRAM>::tick(){
     if (req->type == Request::Type::READ || req->type == Request::Type::EXTENSION) {
         req->depart = clk + channel->spec->read_latency;
         pending.push_back(*req);
+    } else {
+      if (req->type == Request::Type::WRITE) {
+        req->stat_callback(*req);
+      }
     }
 
     // remove request from queue

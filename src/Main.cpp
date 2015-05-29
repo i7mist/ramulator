@@ -63,9 +63,9 @@ int main (int argc, char** argv)
     int reads = 0, writes = 0, clks = 0;
     long addr = 0;
     Request::Type type = Request::Type::READ;
-    Statistics<DDR3>* stat = new Statistics<DDR3>(); 
+    // Statistics<DDR3>* stat = new Statistics<DDR3>();
 
-    Request req(addr, type, [](Request& r){}, stat->callback);
+    Request req(addr, type, [](Request& r){}, memory.stat->getcallback());
 
     while (!end || memory.pending_requests()){
         if (!end && !stall){
@@ -93,7 +93,8 @@ int main (int argc, char** argv)
 
     printf("Simulation done %d clocks [%.3lfns], %d reads [%.3lf GB/s], %d writes [%.3lf GB/s], "
         "rowhit %d, rowconflict %d\n",
-        clks, t, reads, rbw, writes, wbw, stat->get_rowhit(), stat->get_rowconflict());
+        clks, t, reads, rbw, writes, wbw, memory.stat->getstat("rowHit"),
+        memory.stat->getstat("rowConflict"));
 
     /* histogram of read latencies */
     // long total_latency = 0;

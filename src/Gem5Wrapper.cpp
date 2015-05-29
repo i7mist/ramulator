@@ -35,6 +35,7 @@ Gem5Wrapper::Gem5Wrapper(const string& config_file, int cacheline)
     assert(name_to_func.find(std_name) != name_to_func.end() && "unrecognized standard name");
     mem = name_to_func[std_name](cfg.options, cacheline);
     tCK = mem->clk_ns();
+    stat = mem->get_stat_base();
 }
 
 

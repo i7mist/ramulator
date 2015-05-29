@@ -4,11 +4,13 @@
 #include "DRAM.h"
 #include "Request.h"
 #include "Controller.h"
+#include "Statistics.h"
 #include <vector>
 #include <functional>
 #include <cmath>
 #include <cassert>
 #include <tuple>
+#include <memory>
 
 using namespace std;
 namespace ramulator
@@ -22,6 +24,7 @@ public:
     virtual void tick() = 0;
     virtual bool send(Request req) = 0;
     virtual int pending_requests() = 0;
+    virtual StatisticsBase* get_stat_base() = 0;
 };
 
 template <class T, template<typename> class Controller = Controller >
@@ -37,6 +40,7 @@ public:
     vector<Controller<T>*> ctrls;
     T * spec;
     vector<int> addr_bits;
+    std::unique_ptr<StatisticsBase> stat;
     
     int tx_bits;
 
@@ -45,6 +49,8 @@ public:
           spec(ctrls[0]->channel->spec),
           addr_bits(int(T::Level::MAX))
     {
+        // init Statistics Structure
+        stat.reset(new Statistics<T>());
         // make sure 2^N channels/ranks
         int *sz = spec->org_entry.count;
         assert((sz[0] & (sz[0] - 1)) == 0);
@@ -117,6 +123,10 @@ public:
         for (auto ctrl: ctrls)
             reqs += ctrl->readq.size() + ctrl->writeq.size() + ctrl->otherq.size() + ctrl->pending.size();
         return reqs;
+    }
+
+    StatisticsBase* get_stat_base() {
+      return stat.get();
     }
 
 private:

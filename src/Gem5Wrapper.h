@@ -2,6 +2,7 @@
 #define __GEM5_WRAPPER_H
 
 #include <string>
+#include <memory>
 
 using namespace std;
 
@@ -10,6 +11,7 @@ namespace ramulator
 
 class Request;
 class MemoryBase;
+class StatisticsBase;
 
 class Gem5Wrapper 
 {
@@ -21,6 +23,7 @@ public:
     ~Gem5Wrapper();
     void tick();
     bool send(Request req);
+    StatisticsBase* stat;
 };
 
 } /*namespace ramulator*/

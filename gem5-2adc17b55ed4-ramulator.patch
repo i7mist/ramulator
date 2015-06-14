@@ -1,0 +1,440 @@
+# HG changeset patch
+# User Tianshi Li <9413fi@gmail.com>
+# Date 1434299986 -28800
+#      Mon Jun 15 00:39:46 2015 +0800
+# Node ID 2adc17b55ed4fed497501075bf9ecd23ec8747d5
+# Parent  a48faafdb3bfb8c57360227acd12a387705b52ba
+integrate Gem5 with the Ramulator
+
+diff -r a48faafdb3bf -r 2adc17b55ed4 SConstruct
+--- a/SConstruct	Fri Jan 30 15:49:34 2015 -0600
++++ b/SConstruct	Mon Jun 15 00:39:46 2015 +0800
+@@ -555,7 +555,8 @@
+     main.Append(CCFLAGS=['-Wall', '-Wno-sign-compare', '-Wundef'])
+     # We always compile using C++11, but only gcc >= 4.7 and clang 3.1
+     # actually use that name, so we stick with c++0x
+-    main.Append(CXXFLAGS=['-std=c++0x'])
++    # Patch: We use C++11 here for the Ramulator
++    main.Append(CXXFLAGS=['-std=c++11'])
+     # Add selected sanity checks from -Wextra
+     main.Append(CXXFLAGS=['-Wmissing-field-initializers',
+                           '-Woverloaded-virtual'])
+@@ -667,9 +668,9 @@
+ 
+     # On Mac OS X/Darwin we need to also use libc++ (part of XCode) as
+     # opposed to libstdc++, as the later is dated.
+-    if sys.platform == "darwin":
+-        main.Append(CXXFLAGS=['-stdlib=libc++'])
+-        main.Append(LIBS=['c++'])
++    #if sys.platform == "darwin":
++    main.Append(CXXFLAGS=['-stdlib=libc++'])
++    main.Append(LIBS=['c++'])
+ 
+ else:
+     print termcap.Yellow + termcap.Bold + 'Error' + termcap.Normal,
+@@ -1199,6 +1200,10 @@
+ main.SConscript('ext/dramsim2/SConscript',
+                 variant_dir = joinpath(build_root, 'dramsim2'))
+ 
++# ramulator build is shared across all configs in the build root.
++main.SConscript('ext/ramulator/SConscript',
++                variant_dir = joinpath(build_root, 'ramulator'))
++
+ # DRAMPower build is shared across all configs in the build root.
+ main.SConscript('ext/drampower/SConscript',
+                 variant_dir = joinpath(build_root, 'drampower'))
+diff -r a48faafdb3bf -r 2adc17b55ed4 configs/common/MemConfig.py
+--- a/configs/common/MemConfig.py	Fri Jan 30 15:49:34 2015 -0600
++++ b/configs/common/MemConfig.py	Mon Jun 15 00:39:46 2015 +0800
+@@ -55,6 +55,7 @@
+     ("lpddr3_1600_x32", "LPDDR3_1600_x32"),
+     ("wio_200_x128", "WideIO_200_x128"),
+     ("dramsim2", "DRAMSim2"),
++    ("ramulator", "Ramulator"),
+     ("ruby_memory", "RubyMemoryControl")
+     ]
+ 
+@@ -199,6 +200,12 @@
+         for i in xrange(nbr_mem_ctrls):
+             mem_ctrl = create_mem_ctrl(cls, r, i, nbr_mem_ctrls, intlv_bits,
+                                        system.cache_line_size.value)
++            # Set the config for Ramulator
++            if issubclass(cls, m5.objects.Ramulator):
++              if not options.ramulator_config:
++                fatal("--mem-type=ramulator require --ramulator-config option")
++              mem_ctrl.config_file = options.ramulator_config
++
+             # Set the number of ranks based on the command-line
+             # options if it was explicitly set
+             if issubclass(cls, m5.objects.DRAMCtrl) and \
+diff -r a48faafdb3bf -r 2adc17b55ed4 configs/common/Options.py
+--- a/configs/common/Options.py	Fri Jan 30 15:49:34 2015 -0600
++++ b/configs/common/Options.py	Mon Jun 15 00:39:46 2015 +0800
+@@ -95,6 +95,9 @@
+     parser.add_option("--mem-size", action="store", type="string",
+                       default="512MB",
+                       help="Specify the physical memory size (single memory)")
++    parser.add_option("--ramulator-config", type="string",
++                      dest="ramulator_config",
++                      help="Specify Ramulator configuration file, overrides other --mem-XXX options")
+ 
+     parser.add_option("-l", "--lpae", action="store_true")
+     parser.add_option("-V", "--virtualisation", action="store_true")
+diff -r a48faafdb3bf -r 2adc17b55ed4 ext/ramulator/README
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/ext/ramulator/README	Mon Jun 15 00:39:46 2015 +0800
+@@ -0,0 +1,11 @@
++To use Ramulator in gem5 simulations
++
++1. Download Ramulator
++    1.1 Go to ext/ramulator (this directory)
++    1.2 copy Ramulator code so it's contents are located in ext/ramulator/Ramulator/
++
++2. Compile gem5
++
++3. Run gem5 with Ramulator
++    3.1 Use --mem-type=ramulator and --ramulator-config=XXX
++
+diff -r a48faafdb3bf -r 2adc17b55ed4 ext/ramulator/SConscript
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/ext/ramulator/SConscript	Mon Jun 15 00:39:46 2015 +0800
+@@ -0,0 +1,43 @@
++# -*- mode:python -*-
++
++import os
++
++Import('main')
++
++if not os.path.exists(Dir('.').srcnode().abspath + '/Ramulator'):
++    main['HAVE_RAMULATOR'] = False
++    Return()
++
++# We have got the folder, so add the library and build the wrappers
++main['HAVE_RAMULATOR'] = True
++
++# Add the appropriate files. We leave out the trace driven simulator
++dram_files = []
++
++def DRAMFile(filename):
++    dram_files.append(File('Ramulator/src/' + filename))
++
++DRAMFile('Config.cpp')
++DRAMFile('Controller.cpp')
++DRAMFile('DDR3.cpp')
++DRAMFile('DDR4.cpp')
++DRAMFile('GDDR5.cpp')
++DRAMFile('Gem5Wrapper.cpp')
++DRAMFile('HBM.cpp')
++DRAMFile('LPDDR3.cpp')
++DRAMFile('LPDDR4.cpp')
++DRAMFile('MemoryFactory.cpp')
++DRAMFile('SALP.cpp')
++DRAMFile('WideIO.cpp')
++DRAMFile('WideIO2.cpp')
++
++dramenv = main.Clone()
++dramenv.Append(CXXFLAGS=['-Wno-missing-field-initializers'])
++dramenv.Append(CXXFLAGS=['-Wno-unused-variable'])
++dramenv.Append(CXXFLAGS=['-Wno-reorder'])
++
++dramenv.Library('ramulator', [dramenv.SharedObject(f) for f in dram_files])
++
++main.Prepend(CPPPATH=Dir('.'))
++main.Append(LIBS=['ramulator'])
++main.Prepend(LIBPATH=[Dir('.')])
+diff -r a48faafdb3bf -r 2adc17b55ed4 gem5-config.cfg
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gem5-config.cfg	Mon Jun 15 00:39:46 2015 +0800
+@@ -0,0 +1,26 @@
++########################
++# Example config file
++# Comments start with #
++# There are restrictions for valid channel/rank numbers
++ standard = DDR3
++ channels = 4
++ ranks = 1
++ speed = DDR3_1600K
++ org = DDR3_4Gb_x8
++#
++########################
++
++
++
++
++########################
++# Another example
++#
++# standard = SALP-MASA
++# subarrays = 8
++# channels = 1
++# ranks = 1
++# speed = SALP_1600K
++# org = SALP_4Gb_x8
++#
++########################
+diff -r a48faafdb3bf -r 2adc17b55ed4 src/mem/Ramulator.py
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/src/mem/Ramulator.py	Mon Jun 15 00:39:46 2015 +0800
+@@ -0,0 +1,13 @@
++# -*- mode:python -*-
++from m5.params import *
++from AbstractMemory import *
++
++# A wrapper for DRAMSim2 multi-channel memory controller
++class Ramulator(AbstractMemory):
++    type = 'Ramulator'
++    cxx_header = "mem/ramulator.hh"
++
++    # A single port for now
++    port = SlavePort("Slave port")
++
++    config_file = Param.String("", "configuration file")
+diff -r a48faafdb3bf -r 2adc17b55ed4 src/mem/SConscript
+--- a/src/mem/SConscript	Fri Jan 30 15:49:34 2015 -0600
++++ b/src/mem/SConscript	Mon Jun 15 00:39:46 2015 +0800
+@@ -81,6 +81,11 @@
+     Source('dramsim2_wrapper.cc')
+     Source('dramsim2.cc')
+ 
++if env['HAVE_RAMULATOR']:
++	SimObject("Ramulator.py")
++	Source('ramulator.cc')
++	DebugFlag("Ramulator")
++
+ SimObject('MemChecker.py')
+ Source('mem_checker.cc')
+ Source('mem_checker_monitor.cc')
+diff -r a48faafdb3bf -r 2adc17b55ed4 src/mem/ramulator.cc
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/src/mem/ramulator.cc	Mon Jun 15 00:39:46 2015 +0800
+@@ -0,0 +1,142 @@
++#include "mem/ramulator.hh"
++#include "Ramulator/src/Gem5Wrapper.h"
++#include "Ramulator/src/Request.h"
++#include "sim/system.hh"
++#include "debug/Ramulator.hh"
++
++Ramulator::Ramulator(const Params *p):
++    AbstractMemory(p),
++    port(name() + ".port", *this),
++    config_file(p->config_file),
++    read_cb_func(std::bind(&Ramulator::readComplete, this, std::placeholders::_1)),
++    send_resp_event(this),
++    tick_event(this) 
++{
++}
++Ramulator::~Ramulator()
++{
++    delete wrapper;
++}
++
++void Ramulator::init() {
++    if (!port.isConnected()){ 
++        fatal("Ramulator port not connected\n");
++    } else { 
++        port.sendRangeChange(); 
++    }
++    wrapper = new ramulator::Gem5Wrapper(config_file, system()->cacheLineSize());
++    ticks_per_clk = Tick(wrapper->tCK * SimClock::Float::ns);
++
++    DPRINTF(Ramulator, "Instantiated Ramulator with config file '%s' (tCK=%lf, %d ticks per clk)\n", 
++        config_file.c_str(), wrapper->tCK, ticks_per_clk);
++}
++
++void Ramulator::startup() {
++    schedule(tick_event, clockEdge());
++}
++
++unsigned int Ramulator::drain(DrainManager* dm) {
++    DPRINTF(Ramulator, "Requested to drain\n");
++    if (resp_queue.size()) {
++        setDrainState(Drainable::Draining);
++        drain_manager = dm;
++        return 1;
++    } else {
++        setDrainState(Drainable::Drained);
++        return 0;
++    }
++}
++
++BaseSlavePort& Ramulator::getSlavePort(const std::string& if_name, PortID idx) {
++    if (if_name != "port") {
++        return MemObject::getSlavePort(if_name, idx);
++    } else {
++        return port;
++    }
++}
++
++void Ramulator::sendResponse() {
++        long addr = resp_queue.front()->getAddr();
++        if (port.sendTimingResp(resp_queue.front())){
++            DPRINTF(Ramulator, "Response to %ld sent.\n", addr);
++            resp_queue.pop_front();
++            if (resp_queue.size() && !send_resp_event.scheduled())
++                schedule(send_resp_event, curTick());
++        } else 
++            resp_stall = true;
++    }
++    
++void Ramulator::tick() {
++    wrapper->tick();
++    if (req_stall){
++        req_stall = false;
++        port.sendRetry();
++    }
++    schedule(tick_event, curTick() + ticks_per_clk);
++}
++
++void Ramulator::recvFunctional(PacketPtr pkt) {
++    pkt->pushLabel(name());
++    functionalAccess(pkt);
++    for (auto i = resp_queue.begin(); i != resp_queue.end(); ++i)
++        pkt->checkFunctional(*i);
++    pkt->popLabel();
++}
++
++bool Ramulator::recvTimingReq(PacketPtr pkt) {
++    for (PacketPtr pkt: pending_del)
++        delete pkt;
++    pending_del.clear();
++    bool accepted = true;
++    if (pkt->isRead()) {
++        ramulator::Request req(pkt->getAddr(), ramulator::Request::Type::READ, read_cb_func);
++        accepted = wrapper->send(req);
++        if (accepted){
++            reads[req.addr].push_back(pkt);
++            DPRINTF(Ramulator, "Read to %ld accepted.\n", req.addr);
++        } else {
++            req_stall = true;
++        }
++    } else if (pkt->isWrite()) {
++        ramulator::Request req(pkt->getAddr(), ramulator::Request::Type::WRITE, read_cb_func);
++        accepted = wrapper->send(req);
++        if (accepted){
++            accessAndRespond(pkt);
++            DPRINTF(Ramulator, "Write to %ld accepted and served.\n", req.addr);
++        } else {
++            req_stall = true;
++        }
++    }
++    return accepted;
++}
++
++void Ramulator::recvRetry() {
++    resp_stall = false;
++    sendResponse();
++}
++
++void Ramulator::accessAndRespond(PacketPtr pkt) {
++    bool need_resp = pkt->needsResponse();
++    access(pkt);
++    if (need_resp) {
++        pkt->firstWordDelay = pkt->lastWordDelay = 0;
++        resp_queue.push_back(pkt);
++        if (!resp_stall && !send_resp_event.scheduled())
++            schedule(send_resp_event, curTick());
++    } else 
++        pending_del.push_back(pkt);
++}
++
++void Ramulator::readComplete(ramulator::Request& req){
++    DPRINTF(Ramulator, "Read to %ld completed.\n", req.addr);
++    auto pkt_q = reads.find(req.addr)->second;
++    PacketPtr pkt = pkt_q.front();
++    pkt_q.pop_front();
++    if (!pkt_q.size())
++        reads.erase(req.addr);
++    accessAndRespond(pkt);
++}
++
++Ramulator *RamulatorParams::create(){
++    return new Ramulator(this);
++}
+diff -r a48faafdb3bf -r 2adc17b55ed4 src/mem/ramulator.hh
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/src/mem/ramulator.hh	Mon Jun 15 00:39:46 2015 +0800
+@@ -0,0 +1,84 @@
++#ifndef __RAMULATOR_HH__
++#define __RAMULATOR_HH__
++
++#include <deque>
++#include <tuple>
++#include <map>
++
++#include "mem/abstract_mem.hh"
++#include "params/Ramulator.hh"
++
++namespace ramulator{
++    class Request;
++    class Gem5Wrapper;
++}
++
++class Ramulator : public AbstractMemory {
++private:
++
++    class TestPort: public SlavePort {
++    private:
++        Ramulator& mem;
++    public:
++        TestPort(const std::string& _name, Ramulator& _mem): SlavePort(_name, &_mem), mem(_mem) {}
++    protected:
++        Tick recvAtomic(PacketPtr pkt) {
++          assert(false && "only accepts functional or timing pakects");
++
++        }
++        
++        void recvFunctional(PacketPtr pkt) {
++            mem.recvFunctional(pkt);
++        }
++
++        bool recvTimingReq(PacketPtr pkt) {
++            return mem.recvTimingReq(pkt);
++        }
++
++        void recvRetry() {
++            mem.recvRetry();
++        }
++
++        AddrRangeList getAddrRanges() const {
++            AddrRangeList ranges;
++            ranges.push_back(mem.getAddrRange());
++            return ranges;
++        }
++    } port;
++
++    std::map<long, std::deque<PacketPtr> > reads;
++    std::deque<PacketPtr> resp_queue;
++    std::deque<PacketPtr> pending_del;
++    DrainManager *drain_manager;
++
++    std::string config_file;
++    ramulator::Gem5Wrapper *wrapper;
++    std::function<void(ramulator::Request&)> read_cb_func;
++    Tick ticks_per_clk;
++    bool resp_stall;
++    bool req_stall;
++    
++    void sendResponse();
++    void tick();
++    
++    EventWrapper<Ramulator, &Ramulator::sendResponse> send_resp_event;
++    EventWrapper<Ramulator, &Ramulator::tick> tick_event;
++
++public:
++    typedef RamulatorParams Params;
++    Ramulator(const Params *p);
++    virtual void init();
++    virtual void startup();
++    unsigned int drain(DrainManager* dm);
++    virtual BaseSlavePort& getSlavePort(const std::string& if_name, 
++        PortID idx = InvalidPortID);
++    ~Ramulator();
++protected:
++    void recvFunctional(PacketPtr pkt);
++    bool recvTimingReq(PacketPtr pkt);
++    void recvRetry();
++    void accessAndRespond(PacketPtr pkt);
++    void readComplete(ramulator::Request& req);
++};
++
++#endif // __RAMULATOR_HH__

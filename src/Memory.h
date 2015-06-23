@@ -40,7 +40,7 @@ public:
     vector<Controller<T>*> ctrls;
     T * spec;
     vector<int> addr_bits;
-    std::unique_ptr<StatisticsBase> stat;
+    std::shared_ptr<StatisticsBase> stat;
     
     int tx_bits;
 

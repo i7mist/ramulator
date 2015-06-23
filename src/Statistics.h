@@ -39,7 +39,8 @@ class Statistics : public StatisticsBase {
           conflict = true;
         }
       }
-      this->rowhit += hit ? 1 : 0;
+      this->read_rowhit += hit && r.type == Request::Type::READ ? 1 : 0;
+      this->write_rowhit += hit && r.type == Request::Type::WRITE ? 1 : 0;
       this->rowconflict += conflict ? 1 : 0;
     }
   };
@@ -51,10 +52,16 @@ class Statistics : public StatisticsBase {
     if (statname == "writeReqs") {
       return writereqs;
     }
-    if (statname == "rowHit") {
-      return rowhit;
+    if (statname == "rowHits") {
+      return read_rowhit + write_rowhit;
     }
-    if (statname == "rowConflict") {
+    if (statname == "readRowHits") {
+      return read_rowhit;
+    }
+    if (statname == "writeRowHits") {
+      return write_rowhit;
+    }
+    if (statname == "rowConflicts") {
       return rowconflict;
     }
     else {
@@ -67,16 +74,16 @@ class Statistics : public StatisticsBase {
     return callback;
   }
 
-  int get_rowhit() {return rowhit;}
-  int get_rowconflict() {return rowconflict;}
+
  private:
   std::map<int, int> latencies;
   int readreqs = 0;
   int writereqs = 0;
-  int rowhit = 0;
+  int read_rowhit = 0;
+  int write_rowhit = 0;
   int rowconflict = 0;
 };
 
-}
+} // namespace ramulator
 
 #endif

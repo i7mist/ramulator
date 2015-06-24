@@ -48,13 +48,15 @@ private:
 };
 
 
-class Processor {
+class Core {
 public:
     long clk = 0;
     long retired = 0;
+    int id = 0;
     function<bool(Request)> send;
 
-    Processor(const char* trace_fname, function<bool(Request)> send);
+    Core(int coreid, const char* trace_fname,
+        function<bool(Request)> send);
     void tick();
     void receive(Request& req);
     double calc_ipc();
@@ -69,6 +71,17 @@ private:
     long req_addr;
     Request::Type req_type;
     bool more_reqs;
+};
+
+class Processor {
+public:
+    Processor(vector<const char*> trace_list,
+        function<bool(Request)> send);
+    void tick();
+    bool finished();
+
+    std::vector<Core> cores;
+    std::vector<double> ipcs;
 };
 
 }

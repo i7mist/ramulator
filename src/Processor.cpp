@@ -4,19 +4,55 @@
 using namespace std;
 using namespace ramulator;
 
-Processor::Processor(const char* trace_fname, function<bool(Request)> send)
-    : send(send), callback(bind(&Processor::receive, this, placeholders::_1)), trace(trace_fname)
+Processor::Processor(vector<const char*> trace_list,
+    function<bool(Request)> send)
+    :ipcs(trace_list.size(), -1) {
+  int tracenum = trace_list.size();
+  assert(tracenum > 0);
+  printf("tracenum: %d\n", tracenum);
+  printf("trace_list[0]: %s\n", trace_list[0]);
+  printf("trace_list[1]: %s\n", trace_list[1]);
+  for (int i = 0 ; i < tracenum ; ++i) {
+    cores.emplace_back(i, trace_list[i], send);
+  }
+  for (int i = 0 ; i < tracenum ; ++i) {
+    cores[i].callback = bind(&Core::receive, &cores[i],
+        placeholders::_1);
+  }
+}
+
+void Processor::tick() {
+  for (auto& core : cores) {
+    core.tick();
+  }
+}
+
+bool Processor::finished() {
+  for (int i = 0 ; i < cores.size(); ++i) {
+    if (!cores[i].finished()) {
+      return false;
+    }
+    if (ipcs[i] < 0) {
+      ipcs[i] = cores[i].calc_ipc();
+    }
+  }
+  return true;
+}
+
+Core::Core(int coreid, const char* trace_fname, function<bool(Request)> send)
+    : id(coreid), trace(trace_fname), send(send)
 {
     more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
 }
 
 
-double Processor::calc_ipc()
+double Core::calc_ipc()
 {
+    printf("[%d]retired: %ld, clk, %ld\n", id, retired, clk);
     return (double) retired / clk;
 }
 
-void Processor::tick() 
+void Core::tick() 
 {
     clk++;
 
@@ -58,11 +94,11 @@ void Processor::tick()
     more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
 }
 
-bool Processor::finished()
+bool Core::finished()
 {
     return !more_reqs && window.is_empty();
 }
-void Processor::receive(Request& req) 
+void Core::receive(Request& req) 
 {
     window.set_ready(req.addr);
 }

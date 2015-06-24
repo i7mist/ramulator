@@ -113,8 +113,9 @@ int main (int argc, char** argv)
 #ifdef RAMULATOR_CPUTRACE
 
 template <typename T>
-double run_simulation(T *spec, const char *file, int chan, int rank,
-    int cpu_tick, int mem_tick, std::shared_ptr<StatisticsBase>* stat)
+vector<double> run_simulation(T *spec, std::vector<const char *> files,
+    int chan, int rank, int cpu_tick, int mem_tick,
+    std::shared_ptr<StatisticsBase>* stat)
 {
     vector<Controller<T>*> ctrls;
     for (int c = 0; c < chan; c++){
@@ -131,7 +132,7 @@ double run_simulation(T *spec, const char *file, int chan, int rank,
     Memory<T, Controller> memory(ctrls);
     (*stat) = memory.stat;
     auto send = bind(&Memory<T, Controller>::send, &memory, placeholders::_1);
-    Processor proc(file, send, (*stat)->getcallback());
+    Processor proc(files, send, (*stat)->getcallback());
     for (long i = 0; ; i++) {
         // if (i % 100000000 == 0) printf("%ld clocks\n", i);
         proc.tick();
@@ -141,83 +142,85 @@ double run_simulation(T *spec, const char *file, int chan, int rank,
         if (proc.finished() && memory.pending_requests() == 0)
             break;
     }
-    return proc.calc_ipc();
+    return proc.ipcs;
+}
+
+void print_result(const char* spec_name,
+    const vector<double>& ipc, const vector<double>& base_ipc,
+    StatisticsBase* stat) {
+    printf("%10s: ", spec_name);
+    assert(ipc.size() == base_ipc.size());
+    for (int i = 0 ; i < ipc.size(); ++i) {
+      printf("%.5lf ", ipc[i]/base_ipc[i]);
+    }
+    printf("rowhit %d rowconflict %d\n",
+        stat->getstat("rowHits"), stat->getstat("rowConflicts"));
 }
 
 int main(int argc, const char *argv[])
 {
     if (argc < 2){
-        printf("Usage: %s <cpu-trace-file>\n Example: %s cpu.trace", argv[0], argv[0]);
+        printf("Usage: %s <cpu-trace-core1> <cpu-trace-core2>...\n"
+            "Example: %s cpu.trace cpu.trace", argv[0], argv[0]);
         return 0;
     }
     std::shared_ptr<StatisticsBase> stat;
+    std::vector<const char*> files(&argv[1], &argv[argc]);
 
-    double baseIPC = 4, IPC = 0;
+    vector<double> baseIPC, IPC;
     DDR3* ddr3 = new DDR3(DDR3::Org::DDR3_8Gb_x8, DDR3::Speed::DDR3_1333H);
-    baseIPC = run_simulation(ddr3, argv[1], 1, 1, 4, 1, &stat);
-    printf("%10s: %.5lf rowhit %d rowconflict %d\n", "DDR3", 1.0,
-        stat->getstat("rowHits"), stat->getstat("rowConflicts"));
+    baseIPC = run_simulation(ddr3, files, 1, 1, 4, 1, &stat);
+    print_result("DDR3", baseIPC, baseIPC, stat.get());
 
     DDR4* ddr4 = new DDR4(DDR4::Org::DDR4_4Gb_x8, DDR4::Speed::DDR4_2400R);
-    IPC = run_simulation(ddr4, argv[1], 1, 1, 8, 3, &stat);
-    printf("%10s: %.5lf rowhit %d rowconflict %d\n", "DDR4", IPC / baseIPC,
-        stat->getstat("rowHits"), stat->getstat("rowConflicts"));
+    IPC = run_simulation(ddr4, files, 1, 1, 8, 3, &stat);
+    print_result("DDR4", IPC, baseIPC, stat.get());
 
     SALP* salp8 = new SALP(SALP::Org::SALP_4Gb_x8, SALP::Speed::SALP_1600K, SALP::Type::MASA, 8);
-    IPC = run_simulation(salp8, argv[1], 1, 1, 4, 1, &stat);
-    printf("%10s: %.5lf rowhit %d rowconflict %d\n", "SALP", IPC / baseIPC,
-        stat->getstat("rowHits"), stat->getstat("rowConflicts"));
+    IPC = run_simulation(salp8, files, 1, 1, 4, 1, &stat);
+    print_result("SALP", IPC, baseIPC, stat.get());
 
     LPDDR3* lpddr3 = new LPDDR3(LPDDR3::Org::LPDDR3_8Gb_x16, LPDDR3::Speed::LPDDR3_1600);
-    IPC = run_simulation(lpddr3, argv[1], 1, 1, 4, 1, &stat);
-    printf("%10s: %.5lf rowhit %d rowconflict %d\n", "LPDDR3", IPC / baseIPC,
-        stat->getstat("rowHits"), stat->getstat("rowConflicts"));
+    IPC = run_simulation(lpddr3, files, 1, 1, 4, 1, &stat);
+    print_result("LPDDR3", IPC, baseIPC, stat.get());
 
     // total cap: 2GB, 1/2 of others
     LPDDR4* lpddr4 = new LPDDR4(LPDDR4::Org::LPDDR4_8Gb_x16, LPDDR4::Speed::LPDDR4_2400);
-    IPC = run_simulation(lpddr4, argv[1], 2, 1, 8, 3, &stat);
-    printf("%10s: %.5lf rowhit %d rowconflict %d\n", "LPDDR4", IPC / baseIPC,
-        stat->getstat("rowHits"), stat->getstat("rowConflicts"));
+    IPC = run_simulation(lpddr4, files, 2, 1, 8, 3, &stat);
+    print_result("LPDDR4", IPC, baseIPC, stat.get());
 
     GDDR5* gddr5 = new GDDR5(GDDR5::Org::GDDR5_8Gb_x16, GDDR5::Speed::GDDR5_6000);
-    IPC = run_simulation(gddr5, argv[1], 1, 1, 2, 1, &stat); //6400 overclock
-    printf("%10s: %.5lf rowhit %d rowconflict %d\n", "GDDR5", IPC / baseIPC,
-        stat->getstat("rowHits"), stat->getstat("rowConflicts"));
+    IPC = run_simulation(gddr5, files, 1, 1, 2, 1, &stat); //6400 overclock
+    print_result("GDDR5", IPC, baseIPC, stat.get());
 
     HBM* hbm = new HBM(HBM::Org::HBM_4Gb, HBM::Speed::HBM_1Gbps);
-    IPC = run_simulation(hbm, argv[1], 8, 1, 32, 5, &stat);
-    printf("%10s: %.5lf rowhit %d rowconflict %d\n", "HBM", IPC / baseIPC,
-        stat->getstat("rowHits"), stat->getstat("rowConflicts"));
+    IPC = run_simulation(hbm, files, 8, 1, 32, 5, &stat);
+    print_result("HBM", IPC, baseIPC, stat.get());
 
     // total cap: 1GB, 1/4 of others
     WideIO* wio = new WideIO(WideIO::Org::WideIO_8Gb, WideIO::Speed::WideIO_266);
-    IPC = run_simulation(wio, argv[1], 4, 1, 12, 1, &stat);
-    printf("%10s: %.5lf rowhit %d rowconflict %d\n", "WideIO", IPC / baseIPC,
-        stat->getstat("rowHits"), stat->getstat("rowConflicts"));
+    IPC = run_simulation(wio, files, 4, 1, 12, 1, &stat);
+    print_result("WideIO", IPC, baseIPC, stat.get());
 
     // total cap: 2GB, 1/2 of others
     WideIO2* wio2 = new WideIO2(WideIO2::Org::WideIO2_8Gb, WideIO2::Speed::WideIO2_1066);
     wio2->channel_width *= 2;
-    IPC = run_simulation(wio2, argv[1], 8, 1, 6, 1, &stat);
-    printf("%10s: %.5lf rowhit %d rowconflict %d\n", "WideIO2", IPC / baseIPC,
-        stat->getstat("rowHits"), stat->getstat("rowConflicts"));
+    IPC = run_simulation(wio2, files, 8, 1, 6, 1, &stat);
+    print_result("WideIO2", IPC, baseIPC, stat.get());
 
     // Various refresh mechanisms
     DSARP* dsddr3_dsarp = new DSARP(DSARP::Org::DSARP_8Gb_x8,
         DSARP::Speed::DSARP_1333, DSARP::Type::DSARP, 8);
-    IPC = run_simulation(dsddr3_dsarp, argv[1], 1, 1, 4, 1, &stat);
-    printf("%10s: %.5lf rowhit %d rowconflict %d\n", "DSARP", IPC / baseIPC,
-        stat->getstat("rowHits"),stat->getstat("rowConflicts"));
+    IPC = run_simulation(dsddr3_dsarp, files, 1, 1, 4, 1, &stat);
+    print_result("DSARP", IPC, baseIPC, stat.get());
 
     ALDRAM* aldram = new ALDRAM(ALDRAM::Org::ALDRAM_4Gb_x8, ALDRAM::Speed::ALDRAM_1600K);
-    IPC = run_simulation(aldram, argv[1], 1, 1, 4, 1, &stat);
-    printf("%10s: %.5lf rowhit %d rowconflict %d\n", "ALDRAM", IPC / baseIPC,
-        stat->getstat("rowHits"), stat->getstat("rowConflicts"));
+    IPC = run_simulation(aldram, files, 1, 1, 4, 1, &stat);
+    print_result("ALDRAM", IPC, baseIPC, stat.get());
 
     TLDRAM* tldram = new TLDRAM(TLDRAM::Org::TLDRAM_4Gb_x8, TLDRAM::Speed::TLDRAM_1600K, 16);
-    IPC = run_simulation(tldram, argv[1], 1, 1, 4, 1, &stat);
-    printf("%10s: %.5lf rowhit %d rowconflict %d\n", "TLDRAM", IPC / baseIPC,
-        stat->getstat("rowHits"), stat->getstat("rowConflicts"));
+    IPC = run_simulation(tldram, files, 1, 1, 4, 1, &stat);
+    print_result("TLDRAM", IPC, baseIPC, stat.get());
 
     return 0;
 }

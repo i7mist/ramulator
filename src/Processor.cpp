@@ -11,8 +11,9 @@ Processor::Processor(vector<const char*> trace_list,
   int tracenum = trace_list.size();
   assert(tracenum > 0);
   printf("tracenum: %d\n", tracenum);
-  printf("trace_list[0]: %s\n", trace_list[0]);
-  printf("trace_list[1]: %s\n", trace_list[1]);
+  for (int i = 0 ; i < tracenum ; ++i) {
+    printf("trace_list[%d]: %s\n", i, trace_list[i]);
+  }
   for (int i = 0 ; i < tracenum ; ++i) {
     cores.emplace_back(i, trace_list[i], send, stat_callback);
   }

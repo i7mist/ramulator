@@ -126,24 +126,33 @@ double run_simulation(T *spec, std::vector<const char *> files,
     }
     Memory<T, Controller> memory(ctrls);
     auto send = bind(&Memory<T, Controller>::send, &memory, placeholders::_1);
-    Processor proc(files, send);
+#ifdef EARLY_EXIT
+    Processor proc(files, send, true);
+#else
+    Processor proc(files, send, false);
+#endif
     for (long i = 0; ; i++) {
         // if (i % 100000000 == 0) printf("%ld clocks\n", i);
         proc.tick();
         if (i % cpu_tick == (cpu_tick - 1))
             for (int j = 0; j < mem_tick; j++)
                 memory.tick();
-        if (proc.finished() && memory.pending_requests() == 0)
+#ifdef EARLY_EXIT
+        if (proc.finished())
             break;
+#else
+        if (proc.finished() && (memory.pending_requests() == 0))
+            break;
+#endif
     }
-    return proc.ipcs[0];
+    return proc.ipc;
 }
 
 int main(int argc, const char *argv[])
 {
     if (argc < 2){
         printf("Usage: %s <cpu-trace-core1> <cpu-trace-core2>...\n"
-            "Example: %s cpu.trace cpu.trace", argv[0], argv[0]);
+            "Example: %s cpu.trace cpu.trace\n", argv[0], argv[0]);
         return 0;
     }
 

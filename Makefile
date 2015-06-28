@@ -11,7 +11,7 @@ ramulator-dramtrace: $(MAIN) $(OBJ)
 	$(CXX) $(CXXFLAGS) -DRAMULATOR_DRAMTRACE -o $@ $^
 
 ramulator-cputrace: $(MAIN) $(OBJ)
-	$(CXX) $(CXXFLAGS) -DRAMULATOR_CPUTRACE -o $@ $^
+	$(CXX) $(CXXFLAGS) -DRAMULATOR_CPUTRACE -DEARLY_EXIT -o $@ $^
 
 .PHONY: clean all
 

@@ -79,12 +79,15 @@ class Processor {
 public:
     Processor(vector<const char*> trace_list,
         function<bool(Request)> send,
-        function<void(Request&)> stat_callback);
+        function<void(Request&)> stat_callback, bool early_exit);
     void tick();
     bool finished();
 
     std::vector<Core> cores;
     std::vector<double> ipcs;
+    // When early_exit is true, the simulation exits when the earliest
+    // trace finishes.
+    bool early_exit;
 };
 
 }

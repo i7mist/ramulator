@@ -6,8 +6,9 @@ using namespace ramulator;
 
 Processor::Processor(vector<const char*> trace_list,
     function<bool(Request)> send,
-    function<void(Request&)> stat_callback)
-    :ipcs(trace_list.size(), -1) {
+    function<void(Request&)> stat_callback,
+    bool early_exit)
+    :ipcs(trace_list.size(), -1), early_exit(early_exit) {
   int tracenum = trace_list.size();
   assert(tracenum > 0);
   printf("tracenum: %d\n", tracenum);
@@ -30,20 +31,33 @@ void Processor::tick() {
 }
 
 bool Processor::finished() {
-  for (int i = 0 ; i < cores.size(); ++i) {
-    if (!cores[i].finished()) {
-      return false;
+  if (early_exit) {
+    for (int i = 0 ; i < cores.size(); ++i) {
+      if (cores[i].finished()) {
+        for (int j = 0 ; j < cores.size() ; ++j) {
+          ipcs[j] = cores[j].calc_ipc();
+        }
+        return true;
+      }
     }
-    if (ipcs[i] < 0) {
-      ipcs[i] = cores[i].calc_ipc();
+    return false;
+  } else {
+    for (int i = 0 ; i < cores.size(); ++i) {
+      if (!cores[i].finished()) {
+        return false;
+      }
+      if (ipcs[i] < 0) {
+        ipcs[i] = cores[i].calc_ipc();
+      }
     }
+    return true;
   }
-  return true;
 }
 
-Core::Core(int coreid, const char* trace_fname, function<bool(Request)> send, function<void(Request&)> stat_callback)
-    : id(coreid), trace(trace_fname),
-    send(send), stat_callback(stat_callback)
+Core::Core(int coreid, const char* trace_fname, function<bool(Request)> send,
+    function<void(Request&)> stat_callback)
+    : id(coreid), send(send), stat_callback(stat_callback),
+    trace(trace_fname)
 {
     more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
 }

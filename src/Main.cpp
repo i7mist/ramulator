@@ -132,15 +132,24 @@ vector<double> run_simulation(T *spec, std::vector<const char *> files,
     Memory<T, Controller> memory(ctrls);
     (*stat) = memory.stat;
     auto send = bind(&Memory<T, Controller>::send, &memory, placeholders::_1);
-    Processor proc(files, send, (*stat)->getcallback());
+#ifdef EARLY_EXIT
+    Processor proc(files, send, (*stat)->getcallback(), true);
+#else
+    Processor proc(files, send, (*stat)->getcallback(), false);
+#endif
     for (long i = 0; ; i++) {
         // if (i % 100000000 == 0) printf("%ld clocks\n", i);
         proc.tick();
         if (i % cpu_tick == (cpu_tick - 1))
             for (int j = 0; j < mem_tick; j++)
                 memory.tick();
-        if (proc.finished() && memory.pending_requests() == 0)
+#ifdef EARLY_EXIT
+        if (proc.finished())
             break;
+#else
+        if (proc.finished() && (memory.pending_requests() == 0))
+            break;
+#endif
     }
     return proc.ipcs;
 }
@@ -149,10 +158,14 @@ void print_result(const char* spec_name,
     const vector<double>& ipc, const vector<double>& base_ipc,
     StatisticsBase* stat) {
     printf("%10s: ", spec_name);
+#ifdef EARLY_EXIT
+    printf("%.5lf ", ipc[0]/base_ipc[0]);
+#else
     assert(ipc.size() == base_ipc.size());
     for (int i = 0 ; i < ipc.size(); ++i) {
       printf("%.5lf ", ipc[i]/base_ipc[i]);
     }
+#endif
     printf("rowhit %d rowconflict %d\n",
         stat->getstat("rowHits"), stat->getstat("rowConflicts"));
 }
@@ -161,7 +174,7 @@ int main(int argc, const char *argv[])
 {
     if (argc < 2){
         printf("Usage: %s <cpu-trace-core1> <cpu-trace-core2>...\n"
-            "Example: %s cpu.trace cpu.trace", argv[0], argv[0]);
+            "Example: %s cpu.trace cpu.trace\n", argv[0], argv[0]);
         return 0;
     }
     std::shared_ptr<StatisticsBase> stat;

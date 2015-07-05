@@ -1,6 +1,7 @@
 #ifndef __PROCESSOR_H
 #define __PROCESSOR_H
 
+#include "Cache.h"
 #include "Request.h"
 #include <iostream>
 #include <vector>

@@ -4,7 +4,7 @@ namespace ramulator
 {
 
 Cache::Cache(int size, int assoc, int block_size,
-    Level level, std::function<int(Request)> send_next,
+    Level level, std::function<bool(Request)> send_next,
     std::function<void(Line)> evict_next):
     level(level), size(size), assoc(assoc), block_size(block_size),
     send_next(send_next), evict_next(evict_next) {
@@ -20,12 +20,13 @@ Cache::Cache(int size, int assoc, int block_size,
     tag_offset = calc_log2(block_num) + index_offset;
 }
 
-int Cache::send(Request req) {
+bool Cache::send(Request req) {
   // Now it ignores the different latency of different level hit.
   std::vector<Line>::iterator line_it;
   if (is_hit(req.addr, &line_it)) {
     line_it->timestamp = clk;
-    return int(level);
+    hit_list.push_back(make_pair(clk + latency[int(level)], req));
+    return true;
   } else {
     auto victim = get_victim(Line(req.addr, get_tag(req.addr), clk));
     if (level != Level::L3) {
@@ -35,11 +36,12 @@ int Cache::send(Request req) {
       return send_next(req);
     } else {
       if (victim.addr != -1) {
-        Request write_req(victim.addr, Request::Type::WRITE, NULL);
-        wait_list.push_back(make_pair(clk + latency, write_req));
+        Request write_req(victim.addr, Request::Type::WRITE,
+            nullptr);
+        wait_list.push_back(make_pair(clk + latency[int(level)], write_req));
       }
-      wait_list.push_back(make_pair(clk + latency, req));
-      return 0;
+      wait_list.push_back(make_pair(clk + latency[int(level)], req));
+      return true;
     }
   }
 }
@@ -68,13 +70,23 @@ bool Cache::is_hit(long addr, std::vector<Line>::iterator* pos) {
 void Cache::tick() {
   assert(level == Level::L3);
   ++clk;
+  // Sends ready waiting request to memory
   auto it = wait_list.begin();
   while (it != wait_list.end() && it->first >= clk) {
     if (!send_next(it->second)) {
       ++it;
-      continue;
     } else {
       it = wait_list.erase(it);
+    }
+  }
+  // hit request callback
+  it = hit_list.begin();
+  while (it != wait_list.end()) {
+    if (it->first >= clk) {
+      it->second.callback(it->second);
+      it = hit_list.erase(it);
+    } else {
+      ++it;
     }
   }
 }

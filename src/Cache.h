@@ -29,14 +29,15 @@ public:
   };
 
   Cache(int size, int assoc, int block_size,
-      Level level, std::function<int(Request)> send_next,
+      Level level, std::function<bool(Request)> send_next,
       std::function<void(Line)> evict_next);
 
-  int latency = 4 + 10 + 35; // L1 + L2 + L3
+  // L1, L2, L3 accumulated latencies
+  int latency[int(Level::MAX)] = {4, 10 + 4, 4 + 10 + 35};
 
-  std::function<int(Request)> send_next;
+  std::function<bool(Request)> send_next;
   std::function<void(Line)> evict_next;
-  int send(Request req);
+  bool send(Request req);
   void evict(Line line);
 
   void tick();
@@ -72,6 +73,7 @@ private:
   }
 
   std::list<std::pair<long, Request> > wait_list;
+  std::list<std::pair<long, Request> > hit_list;
 
   int get_index(long addr) {
     return (addr >> index_offset) & index_mask;

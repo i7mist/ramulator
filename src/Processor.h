@@ -10,7 +10,7 @@
 #include <ctype.h>
 #include <functional>
 
-namespace ramulator 
+namespace ramulator
 {
 
 class Trace {
@@ -57,12 +57,23 @@ public:
     function<bool(Request)> send;
 
     Core(int coreid, const char* trace_fname,
-        function<bool(Request)> send);
+        function<bool(Request)> send_next,
+        function<void(Cache::Line)> evict_next);
     void tick();
     void receive(Request& req);
     double calc_ipc();
     bool finished();
-    function<void(Request&)> callback; 
+    function<void(Request&)> callback;
+
+    bool no_l1l2 = false;
+    vector<Cache> caches;
+    int l1_size = 1 << 15;
+    int l1_assoc = 1 << 3;
+    int l1_blocksz = 1 << 6;
+
+    int l2_size = 1 << 18;
+    int l2_assoc = 1 << 3;
+    int l2_blocksz = 1 << 6;
 
 private:
     Trace trace;
@@ -84,9 +95,18 @@ public:
     std::vector<Core> cores;
     std::vector<double> ipcs;
     double ipc = 0;
+
     // When early_exit is true, the simulation exits when
     // the earliest trace finishes.
     bool early_exit;
+
+    bool no_shared_cache = false;
+
+    int l3_size = 1 << 23;
+    int l3_assoc = 1 << 3;
+    int l3_blocksz = 1 << 6;
+
+    Cache llc;
 };
 
 }

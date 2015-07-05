@@ -5,25 +5,39 @@ using namespace std;
 using namespace ramulator;
 
 Processor::Processor(vector<const char*> trace_list,
-    function<bool(Request)> send,
+    function<bool(Request)> send_memory,
     bool early_exit)
-    :ipcs(trace_list.size(), -1), early_exit(early_exit) {
+    :ipcs(trace_list.size(), -1), early_exit(early_exit),
+     llc(l3_size, l3_assoc, l3_blocksz, Cache::Level::L3,
+         send_memory, nullptr) {
   int tracenum = trace_list.size();
   assert(tracenum > 0);
   printf("tracenum: %d\n", tracenum);
   for (int i = 0 ; i < tracenum ; ++i) {
     printf("trace_list[%d]: %s\n", i, trace_list[i]);
   }
-  for (int i = 0 ; i < tracenum ; ++i) {
-    cores.emplace_back(i, trace_list[i], send);
+  if (no_shared_cache) {
+    for (int i = 0 ; i < tracenum ; ++i) {
+      cores.emplace_back(
+          i, trace_list[i], send_memory, nullptr);
+    }
+  } else {
+    for (int i = 0 ; i < tracenum ; ++i) {
+      cores.emplace_back(i, trace_list[i],
+          std::bind(&Cache::send, &llc, std::placeholders::_1),
+          std::bind(&Cache::evict, &llc, std::placeholders::_1));
+    }
   }
   for (int i = 0 ; i < tracenum ; ++i) {
-    cores[i].callback = bind(&Core::receive, &cores[i],
+    cores[i].callback = std::bind(&Core::receive, &cores[i],
         placeholders::_1);
   }
 }
 
 void Processor::tick() {
+  if (!no_shared_cache) {
+    llc.tick();
+  }
   for (auto& core : cores) {
     core.tick();
   }
@@ -54,10 +68,25 @@ bool Processor::finished() {
   }
 }
 
-Core::Core(int coreid, const char* trace_fname, function<bool(Request)> send)
-    : id(coreid), send(send), trace(trace_fname)
+Core::Core(int coreid, const char* trace_fname,
+    function<bool(Request)> send_next,
+    function<void(Cache::Line)> evict_next)
+    : id(coreid), trace(trace_fname)
 {
-    more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
+  // Build cache hierarchy
+  if (no_l1l2) {
+    send = send_next;
+  } else {
+    // L2 caches[0]
+    caches.emplace_back(l2_size, l2_assoc, l2_blocksz, Cache::Level::L2, send_next, evict_next);
+    // L1 caches[1]
+    caches.emplace_back(
+        l1_size, l1_assoc, l1_blocksz, Cache::Level::L1,
+        bind(&Cache::send, &caches[0], placeholders::_1),
+        bind(&Cache::evict, &caches[0], placeholders::_1));
+    send = bind(&Cache::send, &caches[1], placeholders::_1);
+  }
+  more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
 }
 
 
@@ -67,7 +96,7 @@ double Core::calc_ipc()
     return (double) retired / clk;
 }
 
-void Core::tick() 
+void Core::tick()
 {
     clk++;
 
@@ -96,7 +125,8 @@ void Core::tick()
         //cout << "Inserted: " << clk << "\n";
 
         window.insert(false, req_addr);
-        more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
+        more_reqs = trace.get_request(
+            bubble_cnt, req_addr, req_type);
         return;
     }
     else {
@@ -113,7 +143,7 @@ bool Core::finished()
 {
     return !more_reqs && window.is_empty();
 }
-void Core::receive(Request& req) 
+void Core::receive(Request& req)
 {
     window.set_ready(req.addr);
 }
@@ -150,7 +180,7 @@ long Window::retire()
 
     int retired = 0;
     while (load > 0 && retired < ipc) {
-        if (!ready_list.at(tail)) 
+        if (!ready_list.at(tail))
             break;
 
         tail = (tail + 1) % depth;
@@ -177,7 +207,7 @@ void Window::set_ready(long addr)
 
 
 Trace::Trace(const char* trace_fname) : file(trace_fname)
-{ 
+{
     if (!file.good()) {
         std::cerr << "Bad trace file: " << trace_fname << std::endl;
         exit(1);

@@ -2,6 +2,7 @@
 #define __CACHE_H
 
 #include "Request.h"
+#include <cstdio>
 #include <cassert>
 #include <functional>
 #include <list>
@@ -33,7 +34,7 @@ public:
       std::function<void(Line)> evict_next);
 
   // L1, L2, L3 accumulated latencies
-  int latency[int(Level::MAX)] = {4, 10 + 4, 4 + 10 + 35};
+  int latency[int(Level::MAX)] = {4, 4 + 12, 4 + 12 + 31};
 
   std::function<bool(Request)> send_next;
   std::function<void(Line)> evict_next;

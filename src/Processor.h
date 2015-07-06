@@ -65,8 +65,7 @@ public:
     bool finished();
     function<void(Request&)> callback;
 
-    bool no_l1l2 = false;
-    vector<Cache> caches;
+    bool no_core_caches = false;
     int l1_size = 1 << 15;
     int l1_assoc = 1 << 3;
     int l1_blocksz = 1 << 6;
@@ -74,6 +73,7 @@ public:
     int l2_size = 1 << 18;
     int l2_assoc = 1 << 3;
     int l2_blocksz = 1 << 6;
+    vector<Cache> caches;
 
 private:
     Trace trace;

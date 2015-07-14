@@ -67,16 +67,6 @@ private:
       return n;
   }
 
-  std::list<Line>::iterator find_line(std::list<Line> lines, long tag) {
-    auto it = lines.begin();
-    for (; it != lines.end() ; ++it) {
-      if (tag == it->tag) {
-        break;
-      }
-    }
-    return it;
-  }
-
   std::list<std::pair<long, Request> > wait_list;
   std::list<std::pair<long, Request> > hit_list;
 
@@ -93,7 +83,6 @@ private:
   // the corresponding victim line on the other hand.
   Line get_victim(Line line) {
     // get victim and insert new element
-    // TODO moves inserting new element to callback from memory
     auto it = cache_lines.find(get_index(line.addr));
     if (it == cache_lines.end()) {
       std::list<Line> init_line(1, line);
@@ -101,7 +90,8 @@ private:
       return Line(-1, -1, -1);
     } else {
       auto& lines = it->second;
-      if (find_line(lines, get_tag(line.addr)) == lines.end()) {
+      if (find_if(lines.begin(), lines.end(),
+          [&line, this](Line l){return (get_tag(line.addr) == l.tag);}) != lines.end()) {
         return Line(-1, -1, -1);
       } else {
         if (lines.size() < assoc) {

@@ -74,7 +74,6 @@ Core::Core(int coreid, const char* trace_fname,
 {
   // Build cache hierarchy
   if (no_core_caches) {
-    assert(llc == nullptr);
     send = send_next;
   } else {
     // L2 caches[0]

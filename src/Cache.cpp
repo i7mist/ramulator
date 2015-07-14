@@ -101,7 +101,8 @@ void Cache::evict(Line line) {
   auto it = cache_lines.find(get_index(line.addr));
   assert(it != cache_lines.end()); // check inclusive feature
   auto& lines = it->second;
-  auto line_it = find_line(lines, get_tag(line.addr));
+  auto line_it = find_if(lines.begin(), lines.end(),
+      [&line, this](Line l){return (l.tag == get_tag(line.addr));});
   assert(line_it != lines.end()); // check inclusive feature
   line_it->timestamp = line.timestamp;
 }
@@ -116,7 +117,8 @@ bool Cache::is_hit(long addr, std::list<Line>::iterator* pos) {
     return false;
   } else {
     auto& lines = it->second;
-    *pos = find_line(lines, get_tag(addr));
+    *pos = find_if(lines.begin(), lines.end(),
+        [addr, this](Line l){return (l.tag == get_tag(addr));});
     bool hit = ((*pos) != lines.end());
     return hit;
   }
@@ -125,7 +127,8 @@ bool Cache::is_hit(long addr, std::list<Line>::iterator* pos) {
 void Cache::invalidate(Line line) {
   auto it = cache_lines.find(get_index(line.addr));
   auto& lines = it->second;
-  auto pos = find_line(lines, get_tag(line.addr));
+  auto pos = find_if(lines.begin(), lines.end(),
+      [&line, this](Line l){return (l.tag == get_tag(line.addr));});
   // If the line is in this level cache, then erase it from
   // the buffer.
   if (pos != lines.end()) {

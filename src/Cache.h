@@ -8,7 +8,7 @@
 #include <list>
 #include <map>
 #include <queue>
-#include <vector>
+#include <list>
 
 namespace ramulator
 {
@@ -30,16 +30,20 @@ public:
   };
 
   Cache(int size, int assoc, int block_size,
-      Level level, std::function<bool(Request)> send_next,
-      std::function<void(Line)> evict_next);
+      Level level, std::function<bool(Request)> send_next);
 
   // L1, L2, L3 accumulated latencies
   int latency[int(Level::MAX)] = {4, 4 + 12, 4 + 12 + 31};
 
-  std::function<bool(Request)> send_next;
-  std::function<void(Line)> evict_next;
+  Cache* higher_cache;
+  Cache* lower_cache;
+
+  std::function<bool(Request)> send_memory;
   bool send(Request req);
   void evict(Line line);
+  void invalidate(Line line);
+
+  void concatlower(Cache* lower);
 
   void tick();
 
@@ -54,7 +58,7 @@ private:
   long clk = 0;
 
   // tag, clk
-  std::map<int, std::vector<Line> > cache_lines;
+  std::map<int, std::list<Line> > cache_lines;
 
   int calc_log2(int val) {
       int n = 0;
@@ -63,7 +67,7 @@ private:
       return n;
   }
 
-  std::vector<Line>::iterator find_line(std::vector<Line> lines, long tag) {
+  std::list<Line>::iterator find_line(std::list<Line> lines, long tag) {
     auto it = lines.begin();
     for (; it != lines.end() ; ++it) {
       if (tag == it->tag) {
@@ -92,7 +96,7 @@ private:
     // TODO moves inserting new element to callback from memory
     auto it = cache_lines.find(get_index(line.addr));
     if (it == cache_lines.end()) {
-      std::vector<Line> init_line(1, line);
+      std::list<Line> init_line(1, line);
       cache_lines.insert(make_pair(get_index(line.addr), init_line));
       return Line(-1, -1, -1);
     } else {
@@ -122,7 +126,7 @@ private:
     }
   }
 
-  bool is_hit(long addr, std::vector<Line>::iterator* line_it);
+  bool is_hit(long addr, std::list<Line>::iterator* line_it);
 
 };
 } // namespace ramulator

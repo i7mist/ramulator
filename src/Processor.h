@@ -57,8 +57,7 @@ public:
     function<bool(Request)> send;
 
     Core(int coreid, const char* trace_fname,
-        function<bool(Request)> send_next,
-        function<void(Cache::Line)> evict_next);
+        function<bool(Request)> send_next, Cache* llc);
     void tick();
     void receive(Request& req);
     double calc_ipc();

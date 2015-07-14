@@ -9,7 +9,7 @@ Processor::Processor(vector<const char*> trace_list,
     bool early_exit)
     :ipcs(trace_list.size(), -1), early_exit(early_exit),
      llc(l3_size, l3_assoc, l3_blocksz, Cache::Level::L3,
-         send_memory, nullptr) {
+         send_memory) {
   int tracenum = trace_list.size();
   assert(tracenum > 0);
   printf("tracenum: %d\n", tracenum);
@@ -25,7 +25,7 @@ Processor::Processor(vector<const char*> trace_list,
     for (int i = 0 ; i < tracenum ; ++i) {
       cores.emplace_back(i, trace_list[i],
           std::bind(&Cache::send, &llc, std::placeholders::_1),
-          std::bind(&Cache::evict, &llc, std::placeholders::_1));
+          &llc);
     }
   }
   for (int i = 0 ; i < tracenum ; ++i) {
@@ -69,22 +69,23 @@ bool Processor::finished() {
 }
 
 Core::Core(int coreid, const char* trace_fname,
-    function<bool(Request)> send_next,
-    function<void(Cache::Line)> evict_next)
+    function<bool(Request)> send_next, Cache* llc)
     : id(coreid), trace(trace_fname)
 {
   // Build cache hierarchy
   if (no_core_caches) {
+    assert(llc == nullptr);
     send = send_next;
   } else {
     // L2 caches[0]
-    caches.emplace_back(l2_size, l2_assoc, l2_blocksz, Cache::Level::L2, send_next, evict_next);
+    caches.push_back(Cache(l2_size, l2_assoc, l2_blocksz, Cache::Level::L2, nullptr));
     // L1 caches[1]
-    caches.emplace_back(
+    caches.push_back(Cache(
         l1_size, l1_assoc, l1_blocksz, Cache::Level::L1,
-        bind(&Cache::send, &caches[0], placeholders::_1),
-        bind(&Cache::evict, &caches[0], placeholders::_1));
+        nullptr));
     send = bind(&Cache::send, &caches[1], placeholders::_1);
+    caches[0].concatlower(llc);
+    caches[1].concatlower(&caches[0]);
   }
   more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
 }
@@ -99,6 +100,12 @@ double Core::calc_ipc()
 void Core::tick()
 {
     clk++;
+
+    if (!no_core_caches) {
+      for (auto& cache : caches) {
+        cache.tick();
+      }
+    }
 
     retired += window.retire();
 

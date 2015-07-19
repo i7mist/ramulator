@@ -150,7 +150,7 @@ bool Core::finished()
 }
 void Core::receive(Request& req)
 {
-    window.set_ready(req.addr);
+    window.set_ready(req.addr, ~(l1_blocksz - 1l));
     // Cache side, call from L1
     caches[1].callback(req);
 }
@@ -199,13 +199,13 @@ long Window::retire()
 }
 
 
-void Window::set_ready(long addr)
+void Window::set_ready(long addr, int mask)
 {
     if (load == 0) return;
 
     for (int i = 0; i < load; i++) {
         int index = (tail + i) % depth;
-        if (addr_list.at(index) != addr)
+        if ((addr_list.at(index) & mask) != (addr & mask))
             continue;
         ready_list.at(index) = true;
     }

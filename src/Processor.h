@@ -38,7 +38,7 @@ public:
     bool is_empty();
     void insert(bool ready, long addr);
     long retire();
-    void set_ready(long addr);
+    void set_ready(long addr, int mask);
 
 private:
     int load = 0;

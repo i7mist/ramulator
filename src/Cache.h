@@ -89,6 +89,10 @@ private:
     return (addr >> tag_offset);
   }
 
+  long align(long addr) {
+    return (addr & ~(block_size-1l));
+  }
+
   // `line` is the new cache line that needs to be inserted to the
   // cache
   // Returns nullptr when no eviction happens or
@@ -113,9 +117,9 @@ private:
   bool hit_mshr(long addr) {
     auto mshr_it =
         find_if(mshr_entries.begin(), mshr_entries.end(),
-            [addr](std::pair<long, std::list<Line>::iterator>
+            [addr, this](std::pair<long, std::list<Line>::iterator>
                    mshr_entry) {
-              return (mshr_entry.first == addr);
+              return (align(mshr_entry.first) == align(addr));
             });
     if (mshr_it != mshr_entries.end()) {
       return true;

@@ -18,10 +18,11 @@ public:
     Trace(const char* trace_fname);
     // trace file format 1:
     // [# of bubbles(non-mem instructions)] [read address(dec or hex)] <optional: write address(evicted cacheline)>
-    bool get_request(long& bubble_cnt, long& req_addr, Request::Type& req_type);
+    bool get_unfiltered_request(long& bubble_cnt, long& req_addr, Request::Type& req_type);
+    bool get_filtered_request(long& bubble_cnt, long& req_addr, Request::Type& req_type);
     // trace file format 2:
     // [address(hex)] [R/W]
-    bool get_request(long& req_addr, Request::Type& req_type);
+    bool get_dramtrace_request(long& req_addr, Request::Type& req_type);
 
 private:
     std::ifstream file;
@@ -66,7 +67,7 @@ public:
 
     // When no_core_caches is false, no_shared_caches should also
     // be false.
-    bool no_core_caches = false;
+    bool no_core_caches = true;
     int l1_size = 1 << 15;
     int l1_assoc = 1 << 3;
     int l1_blocksz = 1 << 6;

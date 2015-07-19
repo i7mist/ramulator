@@ -91,7 +91,13 @@ Core::Core(int coreid, const char* trace_fname,
     caches[0].concatlower(llc);
     caches[1].concatlower(&caches[0]);
   }
-  more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
+  if (no_core_caches) {
+    more_reqs = trace.get_filtered_request(
+        bubble_cnt, req_addr, req_type);
+  } else {
+    more_reqs = trace.get_unfiltered_request(
+        bubble_cnt, req_addr, req_type);
+  }
 }
 
 
@@ -127,12 +133,7 @@ void Core::tick()
         Request req(req_addr, req_type, callback);
         if (!send(req)) return;
 
-        //cout << "Inserted: " << clk << "\n";
-
         window.insert(false, req_addr);
-        more_reqs = trace.get_request(
-            bubble_cnt, req_addr, req_type);
-        return;
     }
     else {
         // write request
@@ -141,7 +142,13 @@ void Core::tick()
         if (!send(req)) return;
     }
 
-    more_reqs = trace.get_request(bubble_cnt, req_addr, req_type);
+    if (no_core_caches) {
+      more_reqs = trace.get_filtered_request(
+          bubble_cnt, req_addr, req_type);
+    } else {
+      more_reqs = trace.get_unfiltered_request(
+          bubble_cnt, req_addr, req_type);
+    }
 }
 
 bool Core::finished()
@@ -221,8 +228,29 @@ Trace::Trace(const char* trace_fname) : file(trace_fname)
     }
 }
 
+bool Trace::get_unfiltered_request(long& bubble_cnt, long& req_addr, Request::Type& req_type)
+{
+    string line;
+    getline(file, line);
+    if (file.eof()) {
+        return false;
+    }
+    size_t pos, end;
+    bubble_cnt = std::stoul(line, &pos, 10);
+    pos = line.find_first_not_of(' ', pos+1);
+    req_addr = std::stoul(line.substr(pos), &end, 0);
 
-bool Trace::get_request(long& bubble_cnt, long& req_addr, Request::Type& req_type)
+    pos = line.find_first_not_of(' ', pos+end);
+
+    if (pos == string::npos || line.substr(pos)[0] == 'R')
+        req_type = Request::Type::READ;
+    else if (line.substr(pos)[0] == 'W')
+        req_type = Request::Type::WRITE;
+    else assert(false);
+    return true;
+}
+
+bool Trace::get_filtered_request(long& bubble_cnt, long& req_addr, Request::Type& req_type)
 {
     static bool has_write = false;
     static long write_addr;
@@ -240,18 +268,15 @@ bool Trace::get_request(long& bubble_cnt, long& req_addr, Request::Type& req_typ
     if (file.eof() || line.size() == 0) {
         file.clear();
         file.seekg(0);
-        // getline(file, line);
         line_num = 0;
         return false;
     }
 
     size_t pos, end;
     bubble_cnt = std::stoul(line, &pos, 10);
-    //std::cout << "Bubble_Count: " << bubble_cnt << std::endl;
 
     pos = line.find_first_not_of(' ', pos+1);
     req_addr = stoul(line.substr(pos), &end, 0);
-    //std::cout << "Req_Addr: " << req_addr << std::endl;
     req_type = Request::Type::READ;
 
     pos = line.find_first_not_of(' ', pos+end);
@@ -262,7 +287,7 @@ bool Trace::get_request(long& bubble_cnt, long& req_addr, Request::Type& req_typ
     return true;
 }
 
-bool Trace::get_request(long& req_addr, Request::Type& req_type)
+bool Trace::get_dramtrace_request(long& req_addr, Request::Type& req_type)
 {
     string line;
     getline(file, line);

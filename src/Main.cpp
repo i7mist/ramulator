@@ -69,7 +69,7 @@ int main (int argc, char** argv)
 
     while (!end || memory.pending_requests()){
         if (!end && !stall){
-            end = !trace.get_request(addr, type);
+            end = !trace.get_dramtrace_request(addr, type);
         }
 
         if (!end){

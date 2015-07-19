@@ -30,6 +30,8 @@ public:
     long depart;
     function<void(Request&)> callback; // call back with more info
 
+    Request(long addr, Type type) : addr(addr), type(type),
+      callback([](Request& req){}) {}
     Request(long addr, Type type, function<void(Request&)> callback)
         : addr(addr), type(type), callback(callback) {}
 

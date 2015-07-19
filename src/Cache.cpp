@@ -4,7 +4,7 @@
 #define debug(...)
 #else
 #define debug(...) do { \
-          printf("\033[36m[DEBUG]"); \
+          printf("\033[36m[DEBUG] %s ", __FUNCTION__); \
           printf(__VA_ARGS__); \
           printf("\033[0m\n"); \
       } while (0)
@@ -14,127 +14,126 @@ namespace ramulator
 {
 
 Cache::Cache(int size, int assoc, int block_size,
-    Level level, std::function<bool(Request)> send_memory):
+    int mshr_entry_num, Level level,
+    std::shared_ptr<CacheSystem> cachesys):
     level(level), size(size), assoc(assoc), block_size(block_size),
-    send_memory(send_memory), lower_cache(nullptr),
-    higher_cache(nullptr) {
+    mshr_entry_num(mshr_entry_num), cachesys(cachesys),
+    lower_cache(nullptr), higher_cache(nullptr) {
 
-  debug("Cache::Cache: level %d size %d assoc %d block_size %d\n",
+  debug("level %d size %d assoc %d block_size %d\n",
       int(level), size, assoc, block_size);
-    // check size, block size and assoc are 2^N
-    assert((size & (size - 1)) == 0);
-    assert((block_size & (block_size - 1)) == 0);
-    assert((assoc & (assoc - 1)) == 0);
-    assert(size >= block_size);
-    block_num = size / (block_size * assoc);
-    index_mask = block_num - 1;
-    index_offset = calc_log2(block_size);
-    tag_offset = calc_log2(block_num) + index_offset;
-  debug("Cache::Cache: index_offset %d", index_offset);
-  debug("Cache::Cache: index_mask 0x%x", index_mask);
-  debug("Cache::Cache: tag_offset %d", tag_offset);
+  // check size, block size and assoc are 2^N
+  assert((size & (size - 1)) == 0);
+  assert((block_size & (block_size - 1)) == 0);
+  assert((assoc & (assoc - 1)) == 0);
+  assert(size >= block_size);
+  block_num = size / (block_size * assoc);
+  index_mask = block_num - 1;
+  index_offset = calc_log2(block_size);
+  tag_offset = calc_log2(block_num) + index_offset;
+  debug("index_offset %d", index_offset);
+  debug("index_mask 0x%x", index_mask);
+  debug("tag_offset %d", tag_offset);
 }
 
 bool Cache::send(Request req) {
-  debug("Cache::send: level %d req.addr %lx req.type %d",
+  debug("level %d req.addr %lx req.type %d",
       int(level), req.addr, int(req.type));
-  std::list<Line>::iterator line_it;
 
-  if (is_hit(req.addr, &line_it)) {
-    line_it->timestamp = clk;
-    hit_list.push_back(make_pair(clk + latency[int(level)], req));
-
-    debug("Cache::send: hit, update timestamp %ld", clk);
-    debug("Cache::send: hit finish time %ld",
-        clk + latency[int(level)]);
-
+  // If there isn't a set, create it.
+  auto& lines = get_lines(req.addr);
+  std::list<Line>::iterator line;
+  if (is_hit(lines, req.addr, &line)) {
+    lines.erase(line);
+    lines.push_back(Line(req.addr, get_tag(req.addr)));
+    cachesys->hit_list.push_back(
+        make_pair(cachesys->clk + latency[int(level)], req));
+    debug("hit, update timestamp %ld", cachesys->clk);
+    debug("hit finish time %ld",
+        cachesys->clk + latency[int(level)]);
     return true;
-
   } else {
-    debug("Cache::send: miss @level %d", level);
-    auto victim = get_victim(Line(req.addr, get_tag(req.addr),
-                                  clk));
-    if (level == Level::L1) {
-      assert(higher_cache == nullptr);
+    debug("miss @level %d", level);
+    // Modify the type of the request to lower level
+    if (req.type == Request::Type::WRITE) {
+      req.type = Request::Type::READ;
     }
-    if (level == Level::L3) {
-      assert(lower_cache == nullptr);
-    }
-
-    if (level != Level::L3) {
-      if (victim.addr != -1) {
-        assert(lower_cache != nullptr);
-        lower_cache->evict(victim);
-
-        if (higher_cache != nullptr) {
-          higher_cache->invalidate(victim);
-        }
-
-        debug("Cache::send: level %d miss evict", int(level));
-
-      }
-      return lower_cache->send(req);
-    } else {
-      if (victim.addr != -1) {
-        Request write_req(victim.addr, Request::Type::WRITE,
-            [](Request& req){});
-        wait_list.push_back(make_pair(clk + latency[int(level)],
-                                      write_req));
-
-        debug("Cache::send: level %d miss evict", int(level));
-        debug("Cache::send: inject one write request req.addr %lx,"
-            " finish time %ld",
-            req.addr, clk + latency[int(level)]);
-
-        if (higher_cache != nullptr) {
-          higher_cache->invalidate(victim);
-        }
-      }
-      wait_list.push_back(make_pair(clk + latency[int(level)], req));
+    // Look it up in MSHR entries
+    assert(req.type == Request::Type::READ);
+    if (hit_mshr(req.addr)) {
       return true;
     }
+    // All requests come to this stage will be READ, so they
+    // should be recorded in MSHR entries.
+    if (mshr_entries.size() == mshr_entry_num) {
+      // When no MSHR entries available, the miss request
+      // is stalling.
+      return false;
+    }
+    // Check whether there is a line available
+    if (all_sets_locked(lines)) {
+      return false;
+    }
+    auto newline = allocate_line(lines, req.addr);
+    // Add to MSHR entries
+    mshr_entries.push_back(make_pair(req.addr, newline));
+
+    // Send the request to next level;
+    if (level != Level::L3) {
+      lower_cache->send(req);
+    } else {
+      cachesys->wait_list.push_back(
+          make_pair(cachesys->clk + latency[int(level)], req));
+    }
+    return true;
   }
 }
 
-void Cache::evict(Line line) {
-  Line newline(line.addr, get_tag(line.addr), line.timestamp);
-  auto it = cache_lines.find(get_index(line.addr));
-  assert(it != cache_lines.end()); // check inclusive feature
-  auto& lines = it->second;
-  auto line_it = find_if(lines.begin(), lines.end(),
-      [&line, this](Line l){return (l.tag == get_tag(line.addr));});
-  assert(line_it != lines.end()); // check inclusive feature
-  line_it->timestamp = line.timestamp;
-}
-
-bool Cache::is_hit(long addr, std::list<Line>::iterator* pos) {
-
-  debug("Cache::is_hit: addr %lx, index %x, tag %lx",
-      addr, get_index(addr), get_tag(addr));
-
-  auto it = cache_lines.find(get_index(addr));
-  if (it == cache_lines.end()) {
-    return false;
+void Cache::evict(long addr) {
+  debug("level %d miss evict", int(level));
+  if (level != Level::L3) {
+    // L1 or L2 eviction
+    assert(lower_cache != nullptr);
+    lower_cache->send(Request(addr, Request::Type::WRITE));
+    if (higher_cache != nullptr) {
+      higher_cache->invalidate(addr);
+    }
   } else {
-    auto& lines = it->second;
-    *pos = find_if(lines.begin(), lines.end(),
-        [addr, this](Line l){return (l.tag == get_tag(addr));});
-    bool hit = ((*pos) != lines.end());
-    return hit;
+    // L3 eviction
+    Request write_req(addr, Request::Type::WRITE);
+    cachesys->wait_list.push_back(
+        make_pair(cachesys->clk + latency[int(level)], write_req));
+    debug("inject one write request to memory system"
+        "write_req.addr %lx, finish time %ld",
+        write_req.addr, cachesys->clk + latency[int(level)]);
+    if (higher_cache != nullptr) {
+      higher_cache->invalidate(addr);
+    }
   }
 }
 
-void Cache::invalidate(Line line) {
-  auto it = cache_lines.find(get_index(line.addr));
+bool Cache::is_hit(std::list<Line>& lines, long addr,
+    std::list<Line>::iterator* pos_ptr) {
+  auto pos = find_if(lines.begin(), lines.end(),
+      [addr, this](Line l){return (l.tag == get_tag(addr));});
+  *pos_ptr = pos;
+  if (pos == lines.end()) {
+    return false;
+  }
+  return !pos->lock;
+}
+
+void Cache::invalidate(long addr) {
+  auto it = cache_lines.find(get_index(addr));
   auto& lines = it->second;
   auto pos = find_if(lines.begin(), lines.end(),
-      [&line, this](Line l){return (l.tag == get_tag(line.addr));});
+      [addr, this](Line l){return (l.tag == get_tag(addr));});
   // If the line is in this level cache, then erase it from
   // the buffer.
-  if (pos != lines.end()) {
+  if (pos != lines.end() && !pos->lock) {
     lines.erase(pos);
     if (higher_cache != nullptr) {
-      higher_cache->invalidate(line);
+      higher_cache->invalidate(addr);
     }
   }
 }
@@ -145,8 +144,55 @@ void Cache::concatlower(Cache* lower) {
   lower->higher_cache = this;
 };
 
-void Cache::tick() {
-//   debug("Cache::tick: clk %ld, level %d", clk, int(level));
+std::list<Cache::Line>::iterator Cache::allocate_line(
+    std::list<Line>& lines, long addr) {
+  // To see if an eviction is needed
+  if (need_eviction(lines, addr)) {
+    // The first one might be locked due to reorder in MC
+    auto victim = find_if(lines.begin(), lines.end(),
+        [](Line line) {
+          return !line.lock;
+        });
+    long victim_addr = victim->addr;
+    lines.pop_front();
+    evict(victim_addr);
+  }
+  lines.push_back(Line(addr, get_tag(addr)));
+  // TODO better way of getting the tail of the list?
+  return (--lines.end());
+}
+
+bool Cache::need_eviction(const std::list<Line>& lines, long addr) {
+  if (find_if(lines.begin(), lines.end(),
+      [addr, this](Line l){
+        return (get_tag(addr) == l.tag);})
+      != lines.end()) {
+    // Due to MSHR, the program can't reach here.
+    assert(false);
+  } else {
+    if (lines.size() < assoc) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+}
+
+void Cache::callback(Request& req) {
+  auto it = find_if(mshr_entries.begin(), mshr_entries.end(),
+      [&req](std::pair<long, std::list<Line>::iterator> mshr_entry) {
+        return (mshr_entry.first == req.addr);
+      });
+  assert(it != mshr_entries.end());
+  it->second->lock = false;
+  mshr_entries.erase(it);
+  if (level != Level::L3) {
+    lower_cache->callback(req);
+  }
+}
+
+void CacheSystem::tick() {
+  debug("clk %ld", clk);
 
   ++clk;
   // Sends ready waiting request to memory
@@ -156,7 +202,7 @@ void Cache::tick() {
       ++it;
     } else {
 
-      debug("Cache::tick: complete req: addr %lx",
+      debug("complete req: addr %lx",
           (it->second).addr);
 
       it = wait_list.erase(it);
@@ -168,7 +214,7 @@ void Cache::tick() {
     if (clk >= it->first) {
       it->second.callback(it->second);
 
-      debug("Cache::tick: finish hit: addr %lx",
+      debug("finish hit: addr %lx",
           (it->second).addr);
 
       it = hit_list.erase(it);

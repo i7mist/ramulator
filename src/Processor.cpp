@@ -8,8 +8,11 @@ Processor::Processor(vector<const char*> trace_list,
     function<bool(Request)> send_memory,
     bool early_exit)
     :ipcs(trace_list.size(), -1), early_exit(early_exit),
-     llc(l3_size, l3_assoc, l3_blocksz, Cache::Level::L3,
-         send_memory) {
+     cachesys(new CacheSystem(send_memory)),
+     llc(l3_size, l3_assoc, l3_blocksz,
+         mshr_per_bank * trace_list.size(),
+         Cache::Level::L3, cachesys) {
+  assert(cachesys != nullptr);
   int tracenum = trace_list.size();
   assert(tracenum > 0);
   printf("tracenum: %d\n", tracenum);
@@ -36,7 +39,7 @@ Processor::Processor(vector<const char*> trace_list,
 
 void Processor::tick() {
   if (!no_shared_cache) {
-    llc.tick();
+    cachesys->tick();
   }
   for (auto& core : cores) {
     core.tick();
@@ -77,11 +80,13 @@ Core::Core(int coreid, const char* trace_fname,
     send = send_next;
   } else {
     // L2 caches[0]
-    caches.push_back(Cache(l2_size, l2_assoc, l2_blocksz, Cache::Level::L2, nullptr));
+    caches.push_back(Cache(
+        l2_size, l2_assoc, l2_blocksz, l2_mshr_num,
+        Cache::Level::L2, llc->cachesys));
     // L1 caches[1]
     caches.push_back(Cache(
-        l1_size, l1_assoc, l1_blocksz, Cache::Level::L1,
-        nullptr));
+        l1_size, l1_assoc, l1_blocksz, l1_mshr_num,
+        Cache::Level::L1, llc->cachesys));
     send = bind(&Cache::send, &caches[1], placeholders::_1);
     caches[0].concatlower(llc);
     caches[1].concatlower(&caches[0]);
@@ -99,12 +104,6 @@ double Core::calc_ipc()
 void Core::tick()
 {
     clk++;
-
-    if (!no_core_caches) {
-      for (auto& cache : caches) {
-        cache.tick();
-      }
-    }
 
     retired += window.retire();
 
@@ -152,6 +151,8 @@ bool Core::finished()
 void Core::receive(Request& req)
 {
     window.set_ready(req.addr);
+    // Cache side, call from L1
+    caches[1].callback(req);
 }
 
 

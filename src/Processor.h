@@ -64,14 +64,18 @@ public:
     bool finished();
     function<void(Request&)> callback;
 
+    // When no_core_caches is false, no_shared_caches should also
+    // be false.
     bool no_core_caches = false;
     int l1_size = 1 << 15;
     int l1_assoc = 1 << 3;
     int l1_blocksz = 1 << 6;
+    int l1_mshr_num = 16;
 
     int l2_size = 1 << 18;
     int l2_assoc = 1 << 3;
     int l2_blocksz = 1 << 6;
+    int l2_mshr_num = 16;
     vector<Cache> caches;
 
 private:
@@ -104,7 +108,9 @@ public:
     int l3_size = 1 << 23;
     int l3_assoc = 1 << 3;
     int l3_blocksz = 1 << 6;
+    int mshr_per_bank = 16;
 
+    std::shared_ptr<CacheSystem> cachesys;
     Cache llc;
 };
 

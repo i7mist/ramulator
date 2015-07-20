@@ -45,7 +45,7 @@ bool Cache::send(Request req) {
   std::list<Line>::iterator line;
   if (is_hit(lines, req.addr, &line)) {
     lines.erase(line);
-    lines.push_back(Line(req.addr, get_tag(req.addr)));
+    lines.push_back(Line(req.addr, get_tag(req.addr), false));
     cachesys->hit_list.push_back(
         make_pair(cachesys->clk + latency[int(level)], req));
     debug("hit, update timestamp %ld", cachesys->clk);
@@ -103,7 +103,7 @@ void Cache::evict(long addr) {
     Request write_req(addr, Request::Type::WRITE);
     cachesys->wait_list.push_back(
         make_pair(cachesys->clk + latency[int(level)], write_req));
-    debug("inject one write request to memory system"
+    debug("inject one write request to memory system "
         "write_req.addr %lx, finish time %ld",
         write_req.addr, cachesys->clk + latency[int(level)]);
     if (higher_cache != nullptr) {
@@ -131,6 +131,7 @@ void Cache::invalidate(long addr) {
   // If the line is in this level cache, then erase it from
   // the buffer.
   if (pos != lines.end() && !pos->lock) {
+    debug("invalidate %lx @ level %d\n", addr, int(level));
     lines.erase(pos);
     if (higher_cache != nullptr) {
       higher_cache->invalidate(addr);
@@ -158,8 +159,9 @@ std::list<Cache::Line>::iterator Cache::allocate_line(
     evict(victim_addr);
   }
   lines.push_back(Line(addr, get_tag(addr)));
-  // TODO better way of getting the tail of the list?
-  return (--lines.end());
+  auto last_element = lines.end();
+  --last_element;
+  return last_element;
 }
 
 bool Cache::need_eviction(const std::list<Line>& lines, long addr) {
@@ -180,12 +182,13 @@ bool Cache::need_eviction(const std::list<Line>& lines, long addr) {
 
 void Cache::callback(Request& req) {
   auto it = find_if(mshr_entries.begin(), mshr_entries.end(),
-      [&req](std::pair<long, std::list<Line>::iterator> mshr_entry) {
-        return (mshr_entry.first == req.addr);
+      [&req, this](std::pair<long, std::list<Line>::iterator> mshr_entry) {
+        return (align(mshr_entry.first) == align(req.addr));
       });
-  assert(it != mshr_entries.end());
-  it->second->lock = false;
-  mshr_entries.erase(it);
+  if (it != mshr_entries.end()) {
+    it->second->lock = false;
+    mshr_entries.erase(it);
+  }
   if (level != Level::L3) {
     lower_cache->callback(req);
   }
@@ -202,8 +205,7 @@ void CacheSystem::tick() {
       ++it;
     } else {
 
-      debug("complete req: addr %lx",
-          (it->second).addr);
+      debug("complete req: addr %lx", (it->second).addr);
 
       it = wait_list.erase(it);
     }
@@ -214,8 +216,7 @@ void CacheSystem::tick() {
     if (clk >= it->first) {
       it->second.callback(it->second);
 
-      debug("finish hit: addr %lx",
-          (it->second).addr);
+      debug("finish hit: addr %lx", (it->second).addr);
 
       it = hit_list.erase(it);
     } else {

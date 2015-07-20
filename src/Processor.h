@@ -67,7 +67,7 @@ public:
 
     // When no_core_caches is false, no_shared_caches should also
     // be false.
-    bool no_core_caches = true;
+    bool no_core_caches = false;
     int l1_size = 1 << 15;
     int l1_assoc = 1 << 3;
     int l1_blocksz = 1 << 6;
@@ -78,6 +78,7 @@ public:
     int l2_blocksz = 1 << 6;
     int l2_mshr_num = 16;
     vector<Cache> caches;
+    Cache* llc;
 
 private:
     Trace trace;

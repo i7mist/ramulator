@@ -40,6 +40,8 @@ public:
     long tag;
     Line(long addr, long tag):
         addr(addr), tag(tag), lock(true) {}
+    Line(long addr, long tag, bool lock):
+        addr(addr), tag(tag), lock(lock) {}
   };
 
   Cache(int size, int assoc, int block_size, int mshr_entry_num,

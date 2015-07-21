@@ -16,7 +16,13 @@ class CacheSystem {
 public:
   CacheSystem(std::function<bool(Request)> send_memory):
     send_memory(send_memory) {}
+  // wait_list contains miss requests with their latencies in
+  // cache. When this latency is met, the send_memory function
+  // will be called to send the request to the memory system.
   std::list<std::pair<long, Request> > wait_list;
+  // hit_list contains hit requests with their latencies in cache.
+  // callback function will be called when this latency is met and
+  // set the instruction status to ready in processor's window.
   std::list<std::pair<long, Request> > hit_list;
 
   std::function<bool(Request)> send_memory;
@@ -35,6 +41,7 @@ public:
   } level;
 
   struct Line {
+    // TODO dirty bit
     bool lock; // When the lock is on, the value is not valid yet.
     long addr;
     long tag;
@@ -73,7 +80,6 @@ private:
   int mshr_entry_num;
   std::vector<std::pair<long, std::list<Line>::iterator>> mshr_entries;
 
-  // tag, clk
   std::map<int, std::list<Line> > cache_lines;
 
   int calc_log2(int val) {
@@ -95,10 +101,6 @@ private:
     return (addr & ~(block_size-1l));
   }
 
-  // `line` is the new cache line that needs to be inserted to the
-  // cache
-  // Returns nullptr when no eviction happens or
-  // the corresponding victim line on the other hand.
   bool need_eviction(const std::list<Line>& lines, long addr);
 
   bool is_hit(std::list<Line>& lines, long addr,

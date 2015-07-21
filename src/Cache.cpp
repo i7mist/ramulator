@@ -61,6 +61,8 @@ bool Cache::send(Request req) {
     // Look it up in MSHR entries
     assert(req.type == Request::Type::READ);
     if (hit_mshr(req.addr)) {
+      debug("hit mshr");
+      // TODO whether to change cache line order here?
       return true;
     }
     // All requests come to this stage will be READ, so they
@@ -68,6 +70,7 @@ bool Cache::send(Request req) {
     if (mshr_entries.size() == mshr_entry_num) {
       // When no MSHR entries available, the miss request
       // is stalling.
+      debug("no mshr entry available");
       return false;
     }
     // Check whether there is a line available
@@ -95,6 +98,7 @@ void Cache::evict(long addr) {
     // L1 or L2 eviction
     assert(lower_cache != nullptr);
     lower_cache->send(Request(addr, Request::Type::WRITE));
+    // TODO move invalidate before send
     if (higher_cache != nullptr) {
       higher_cache->invalidate(addr);
     }
@@ -106,6 +110,7 @@ void Cache::evict(long addr) {
     debug("inject one write request to memory system "
         "write_req.addr %lx, finish time %ld",
         write_req.addr, cachesys->clk + latency[int(level)]);
+    // TODO move invalidate before send
     if (higher_cache != nullptr) {
       higher_cache->invalidate(addr);
     }
@@ -124,6 +129,7 @@ bool Cache::is_hit(std::list<Line>& lines, long addr,
 }
 
 void Cache::invalidate(long addr) {
+  // TODO writeback
   auto it = cache_lines.find(get_index(addr));
   auto& lines = it->second;
   auto pos = find_if(lines.begin(), lines.end(),
@@ -181,6 +187,7 @@ bool Cache::need_eviction(const std::list<Line>& lines, long addr) {
 }
 
 void Cache::callback(Request& req) {
+  debug("level %d", int(level));
   auto it = find_if(mshr_entries.begin(), mshr_entries.end(),
       [&req, this](std::pair<long, std::list<Line>::iterator> mshr_entry) {
         return (align(mshr_entry.first) == align(req.addr));
@@ -189,8 +196,8 @@ void Cache::callback(Request& req) {
     it->second->lock = false;
     mshr_entries.erase(it);
   }
-  if (level != Level::L3) {
-    lower_cache->callback(req);
+  if (level != Level::L1) {
+    higher_cache->callback(req);
   }
 }
 

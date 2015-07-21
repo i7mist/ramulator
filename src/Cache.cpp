@@ -22,15 +22,19 @@ Cache::Cache(int size, int assoc, int block_size,
 
   debug("level %d size %d assoc %d block_size %d\n",
       int(level), size, assoc, block_size);
-  // check size, block size and assoc are 2^N
+
+  // Check size, block size and assoc are 2^N
   assert((size & (size - 1)) == 0);
   assert((block_size & (block_size - 1)) == 0);
   assert((assoc & (assoc - 1)) == 0);
   assert(size >= block_size);
+
+  // Initialize cache configuration
   block_num = size / (block_size * assoc);
   index_mask = block_num - 1;
   index_offset = calc_log2(block_size);
   tag_offset = calc_log2(block_num) + index_offset;
+
   debug("index_offset %d", index_offset);
   debug("index_mask 0x%x", index_mask);
   debug("tag_offset %d", tag_offset);
@@ -43,21 +47,27 @@ bool Cache::send(Request req) {
   // If there isn't a set, create it.
   auto& lines = get_lines(req.addr);
   std::list<Line>::iterator line;
+
   if (is_hit(lines, req.addr, &line)) {
     lines.erase(line);
     lines.push_back(Line(req.addr, get_tag(req.addr), false));
     cachesys->hit_list.push_back(
         make_pair(cachesys->clk + latency[int(level)], req));
+
     debug("hit, update timestamp %ld", cachesys->clk);
     debug("hit finish time %ld",
         cachesys->clk + latency[int(level)]);
+
     return true;
+
   } else {
     debug("miss @level %d", level);
+
     // Modify the type of the request to lower level
     if (req.type == Request::Type::WRITE) {
       req.type = Request::Type::READ;
     }
+
     // Look it up in MSHR entries
     assert(req.type == Request::Type::READ);
     if (hit_mshr(req.addr)) {
@@ -65,6 +75,7 @@ bool Cache::send(Request req) {
       // TODO whether to change cache line order here?
       return true;
     }
+
     // All requests come to this stage will be READ, so they
     // should be recorded in MSHR entries.
     if (mshr_entries.size() == mshr_entry_num) {
@@ -73,11 +84,14 @@ bool Cache::send(Request req) {
       debug("no mshr entry available");
       return false;
     }
+
     // Check whether there is a line available
     if (all_sets_locked(lines)) {
       return false;
     }
+
     auto newline = allocate_line(lines, req.addr);
+
     // Add to MSHR entries
     mshr_entries.push_back(make_pair(req.addr, newline));
 
@@ -94,10 +108,12 @@ bool Cache::send(Request req) {
 
 void Cache::evict(long addr) {
   debug("level %d miss evict", int(level));
+
   if (level != Level::L3) {
     // L1 or L2 eviction
     assert(lower_cache != nullptr);
     lower_cache->send(Request(addr, Request::Type::WRITE));
+
     // TODO move invalidate before send
     if (higher_cache != nullptr) {
       higher_cache->invalidate(addr);
@@ -107,9 +123,11 @@ void Cache::evict(long addr) {
     Request write_req(addr, Request::Type::WRITE);
     cachesys->wait_list.push_back(
         make_pair(cachesys->clk + latency[int(level)], write_req));
+
     debug("inject one write request to memory system "
         "write_req.addr %lx, finish time %ld",
         write_req.addr, cachesys->clk + latency[int(level)]);
+
     // TODO move invalidate before send
     if (higher_cache != nullptr) {
       higher_cache->invalidate(addr);
@@ -205,6 +223,7 @@ void CacheSystem::tick() {
   debug("clk %ld", clk);
 
   ++clk;
+
   // Sends ready waiting request to memory
   auto it = wait_list.begin();
   while (it != wait_list.end() && clk >= it->first) {
@@ -217,6 +236,7 @@ void CacheSystem::tick() {
       it = wait_list.erase(it);
     }
   }
+
   // hit request callback
   it = hit_list.begin();
   while (it != hit_list.end()) {

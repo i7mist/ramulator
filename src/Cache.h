@@ -16,10 +16,12 @@ class CacheSystem {
 public:
   CacheSystem(std::function<bool(Request)> send_memory):
     send_memory(send_memory) {}
+
   // wait_list contains miss requests with their latencies in
   // cache. When this latency is met, the send_memory function
   // will be called to send the request to the memory system.
   std::list<std::pair<long, Request> > wait_list;
+
   // hit_list contains hit requests with their latencies in cache.
   // callback function will be called when this latency is met and
   // set the instruction status to ready in processor's window.
@@ -63,16 +65,13 @@ public:
   Cache* lower_cache;
 
   bool send(Request req);
-  void evict(std::list<Line>* lines,
-      std::list<Line>::iterator victim);
-  void evictline(long addr, bool dirty);
-  std::pair<long, bool> invalidate(long addr);
 
   void concatlower(Cache* lower);
 
   void callback(Request& req);
 
-private:
+protected:
+
   int size;
   int assoc;
   int block_num;
@@ -100,15 +99,39 @@ private:
     return (addr >> tag_offset);
   }
 
+  // Align the address to cache line size
   long align(long addr) {
     return (addr & ~(block_size-1l));
   }
 
+  // Evict the cache line from higher level to this level.
+  // Pass the dirty bit and update LRU queue.
+  void evictline(long addr, bool dirty);
+
+  // Invalidate the line from this level to higher levels
+  // The return value is a pair. The first element is invalidation
+  // latency, and the second is wether the value has new version
+  // in higher level and this level.
+  std::pair<long, bool> invalidate(long addr);
+
+  // Evict the victim from current set of lines.
+  // First do invalidation, then call evictline(L1 or L2) or send
+  // a write request to memory(L3) when dirty bit is on.
+  void evict(std::list<Line>* lines,
+      std::list<Line>::iterator victim);
+
+  // First test whether need eviction, if so, do eviction by
+  // calling evict function. Then allocate a new line and return
+  // the iterator points to it.
   std::list<Line>::iterator allocate_line(
       std::list<Line>& lines, long addr);
 
+  // Check whether the set to hold addr has space or eviction is
+  // needed.
   bool need_eviction(const std::list<Line>& lines, long addr);
 
+  // Check whether this addr is hit and fill in the pos_ptr with
+  // the iterator to the hit line or lines.end()
   bool is_hit(std::list<Line>& lines, long addr,
               std::list<Line>::iterator* pos_ptr);
 

@@ -41,8 +41,9 @@ Cache::Cache(int size, int assoc, int block_size,
 }
 
 bool Cache::send(Request req) {
-  debug("level %d req.addr %lx req.type %d",
-      int(level), req.addr, int(req.type));
+  debug("level %d req.addr %lx req.type %d, index %d, tag %ld",
+      int(level), req.addr, int(req.type), get_index(req.addr),
+      get_tag(req.addr));
 
   // If there isn't a set, create it.
   auto& lines = get_lines(req.addr);
@@ -113,8 +114,6 @@ bool Cache::send(Request req) {
 }
 
 void Cache::evictline(long addr, bool dirty) {
-  // Evict the cache line from higher level to this level.
-  // Pass the dirty bit and update LRU queue.
 
   auto it = cache_lines.find(get_index(addr));
   assert(it != cache_lines.end()); // check inclusive cache
@@ -205,7 +204,7 @@ void Cache::evict(std::list<Line>* lines,
 
 std::list<Cache::Line>::iterator Cache::allocate_line(
     std::list<Line>& lines, long addr) {
-  // To see if an eviction is needed
+  // See if an eviction is needed
   if (need_eviction(lines, addr)) {
     // Get victim.
     // The first one might still be locked due to reorder in MC

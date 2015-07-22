@@ -41,14 +41,14 @@ public:
   } level;
 
   struct Line {
-    // TODO dirty bit
-    bool lock; // When the lock is on, the value is not valid yet.
     long addr;
     long tag;
+    bool lock; // When the lock is on, the value is not valid yet.
+    bool dirty;
     Line(long addr, long tag):
-        addr(addr), tag(tag), lock(true) {}
-    Line(long addr, long tag, bool lock):
-        addr(addr), tag(tag), lock(lock) {}
+        addr(addr), tag(tag), lock(true), dirty(false) {}
+    Line(long addr, long tag, bool lock, bool dirty):
+        addr(addr), tag(tag), lock(lock), dirty(dirty) {}
   };
 
   Cache(int size, int assoc, int block_size, int mshr_entry_num,
@@ -56,14 +56,17 @@ public:
 
   // L1, L2, L3 accumulated latencies
   int latency[int(Level::MAX)] = {4, 4 + 12, 4 + 12 + 31};
+  int latency_each[int(Level::MAX)] = {4, 12, 31};
 
   std::shared_ptr<CacheSystem> cachesys;
   Cache* higher_cache;
   Cache* lower_cache;
 
   bool send(Request req);
-  void evict(long addr);
-  void invalidate(long addr);
+  void evict(std::list<Line>* lines,
+      std::list<Line>::iterator victim);
+  void evictline(long addr, bool dirty);
+  std::pair<long, bool> invalidate(long addr);
 
   void concatlower(Cache* lower);
 
@@ -101,6 +104,9 @@ private:
     return (addr & ~(block_size-1l));
   }
 
+  std::list<Line>::iterator allocate_line(
+      std::list<Line>& lines, long addr);
+
   bool need_eviction(const std::list<Line>& lines, long addr);
 
   bool is_hit(std::list<Line>& lines, long addr,
@@ -118,21 +124,16 @@ private:
     return true;
   }
 
-  bool hit_mshr(long addr) {
+  std::vector<std::pair<long, std::list<Line>::iterator>>::iterator
+  hit_mshr(long addr) {
     auto mshr_it =
         find_if(mshr_entries.begin(), mshr_entries.end(),
             [addr, this](std::pair<long, std::list<Line>::iterator>
                    mshr_entry) {
               return (align(mshr_entry.first) == align(addr));
             });
-    if (mshr_it != mshr_entries.end()) {
-      return true;
-    }
-    return false;
+    return mshr_it;
   }
-
-  std::list<Line>::iterator allocate_line(std::list<Line>& lines,
-      long addr);
 
   std::list<Line>& get_lines(long addr) {
     if (cache_lines.find(get_index(addr))
@@ -142,6 +143,7 @@ private:
     }
     return cache_lines[get_index(addr)];
   }
+
 };
 
 } // namespace ramulator

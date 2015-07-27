@@ -127,7 +127,7 @@ class Stat : public StatBase {
   }
 
   virtual void printdesc() {
-    printf("# %s", _desc.c_str());
+    printf("# %s\n", _desc.c_str());
   }
 };
 
@@ -434,13 +434,53 @@ class Histogram: public Stat<Histogram> {
 
   size_type size() {return param_buckets;}
 };
-//
-// class StandardDeviation: public Stat {
-// };
-//
-// class AverageDeviation: public Stat {
-// };
-//
+
+class StandardDeviation: public Stat<StandardDeviation> {
+ private:
+  Counter sum;
+  Counter squares;
+  Counter samples;
+
+ public:
+  StandardDeviation():sum(Counter()), squares(Counter()),
+      samples(Counter()) {}
+  void sample(Counter val, int number) {
+    Counter value = val * number;
+    sum += value;
+    squares += value * value;
+    samples += number;
+  }
+  size_type size() const {return 1;}
+  bool zero() const {return samples == Counter();}
+  void prepare() {}
+  void reset() {
+    sum = Counter();
+    squares = Counter();
+    samples = Counter();
+  }
+};
+
+class AverageDeviation: public Stat<AverageDeviation> {
+ private:
+  Counter sum;
+  Counter squares;
+
+ public:
+  AverageDeviation():sum(Counter()), squares(Counter()) {}
+  void sample(Counter val, int number) {
+    Counter value = val * number;
+    sum += value;
+    squares += value * value;
+  }
+  size_type size() const {return 1;}
+  bool zero() const {return sum == Counter();}
+  void prepare() {}
+  void reset() {
+    sum = Counter();
+    squares = Counter();
+  }
+};
+
 // class Formula: public Stat {
 // };
 

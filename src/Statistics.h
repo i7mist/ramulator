@@ -220,12 +220,12 @@ class HistogramStat : public DistStatBase<Stats::Histogram> {
     }
 };
 
-// class StandardDeviationStat : public DistStatBase<Stats::StandardDeviation> {
-// };
-//
-// class AverageDeviationStat : public DistStatBase<Stats::AverageDeviation> {
-// };
-//
+class StandardDeviationStat : public DistStatBase<Stats::StandardDeviation> {
+};
+
+class AverageDeviationStat : public DistStatBase<Stats::AverageDeviation> {
+};
+
 // class FormulaStat : public StatBaseVec<Stats::Formula> {
 //   public:
 //     FormulaStat(Stats::Temp r) {

@@ -1,11 +1,20 @@
 #ifndef __STATISTICS_H
 #define __STATISTICS_H
 
-#include "base/statistics.hh"
+// FIXME Find better way to decide where does it come from
+#if !defined(RAMULATOR)
+#define INTEGRATED_WITH_GEM5
+#endif
 
-/* 
+#ifdef INTEGRATED_WITH_GEM5
+#include "base/statistics.hh"
+#else
+#include "StatType.h"
+#endif
+
+/*
   IMPORTANT NOTE - Read this first!
-  
+
   This version of the file provides wrappers to the gem5 statistics classes.
   Feel free to go through this file, though it can be difficult to follow
   with the degree of abstraction going on. In short, this file currently
@@ -67,9 +76,9 @@ class StatBase { // wrapper for Stats::DataWrap
       return self();
     }
 
-    const string &setSeparator() const { return stat->setSeparator(); }
+    const string &setSeparator() const { return stat.setSeparator(); }
 
-    StatBase<StatType> & desc(string _desc) { 
+    StatBase<StatType> & desc(string _desc) {
       stat.desc(_desc);
       return self();
     }
@@ -150,7 +159,11 @@ class VectorStatBase : public StatBaseVec<StatType> { // wrapper for Stats::Vect
       return self();
     }
 
+#ifdef INTEGRATED_WITH_GEM5
     Stats::ScalarProxy<StatType> operator[](Stats::off_type index) { return StatBase<StatType>::stat[index]; }
+#else
+    StatType &operator[](Stats::off_type index) { return StatBase<StatType>::stat[index]; }
+#endif
 };
 
 
@@ -170,12 +183,12 @@ class DistStatBase : public StatBase<StatType> { // wrapper for Stats::DistBase
 
 class ScalarStat : public ScalarStatBase<Stats::Scalar> {
   public:
-    using ScalarStatBase<Stats::Scalar>::operator=;
+    using StatBase<Stats::Scalar>::operator=;
 };
 
 class AverageStat : public ScalarStatBase<Stats::Average> {
   public:
-    using ScalarStatBase<Stats::Average>::operator=;
+    using StatBase<Stats::Average>::operator=;
 };
 
 class VectorStat : public VectorStatBase<Stats::Vector> {
@@ -207,37 +220,37 @@ class HistogramStat : public DistStatBase<Stats::Histogram> {
     }
 };
 
-class StandardDeviationStat : public DistStatBase<Stats::StandardDeviation> {
-};
-
-class AverageDeviationStat : public DistStatBase<Stats::AverageDeviation> {
-};
-
-class FormulaStat : public StatBaseVec<Stats::Formula> {
-  public:
-    FormulaStat(Stats::Temp r) {
-      StatBase<Stats::Formula>::stat = r;
-    }
-
-    const FormulaStat &operator= (Stats::Temp r) { 
-      StatBase<Stats::Formula>::stat = r; 
-      return *this;
-    }
-    const FormulaStat &operator+= (Stats::Temp r) { 
-      StatBase<Stats::Formula>::stat += r;
-      return *this;
-    }
-    const FormulaStat &operator/= (Stats::Temp r) { 
-      StatBase<Stats::Formula>::stat /= r; 
-      return *this;
-    }
-
-    void result(Stats::VResult &vec) const { StatBase<Stats::Formula>::stat.result(vec); }
-
-    Stats::Result total(void) const { return StatBase<Stats::Formula>::stat.total(); }
-};
-
-/* 
+// class StandardDeviationStat : public DistStatBase<Stats::StandardDeviation> {
+// };
+//
+// class AverageDeviationStat : public DistStatBase<Stats::AverageDeviation> {
+// };
+//
+// class FormulaStat : public StatBaseVec<Stats::Formula> {
+//   public:
+//     FormulaStat(Stats::Temp r) {
+//       StatBase<Stats::Formula>::stat = r;
+//     }
+//
+//     const FormulaStat &operator= (Stats::Temp r) {
+//       StatBase<Stats::Formula>::stat = r;
+//       return *this;
+//     }
+//     const FormulaStat &operator+= (Stats::Temp r) {
+//       StatBase<Stats::Formula>::stat += r;
+//       return *this;
+//     }
+//     const FormulaStat &operator/= (Stats::Temp r) {
+//       StatBase<Stats::Formula>::stat /= r;
+//       return *this;
+//     }
+//
+//     void result(Stats::VResult &vec) const { StatBase<Stats::Formula>::stat.result(vec); }
+//
+//     Stats::Result total(void) const { return StatBase<Stats::Formula>::stat.total(); }
+// };
+//
+/*
   Stats TODO
   * VectorDistribution
   * VectorStandardDeviation

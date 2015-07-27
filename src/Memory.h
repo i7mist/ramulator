@@ -4,6 +4,7 @@
 #include "DRAM.h"
 #include "Request.h"
 #include "Controller.h"
+#include "Statistics.h"
 #include <vector>
 #include <functional>
 #include <cmath>
@@ -27,6 +28,8 @@ public:
 template <class T, template<typename> class Controller = Controller >
 class Memory : public MemoryBase
 {
+protected:
+   ScalarStat reqCount;
 public:
     enum class Type {
         ChRaBaRoCo,
@@ -61,6 +64,9 @@ public:
         for (int lev = 0; lev < addr_bits.size(); lev++)
             addr_bits[lev] = calc_log2(sz[lev]);
         addr_bits[int(T::Level::MAX) - 1] -= calc_log2(spec->prefetch_size);
+
+        reqCount.name("reqCount")
+                .desc("memory request Count.");
     }
 
     ~Memory()
@@ -84,7 +90,8 @@ public:
     bool send(Request req)
     {
         req.addr_vec.resize(addr_bits.size());
-        long addr = req.addr;
+//         long addr = req.addr;
+         long addr = req.addr & (~((1 << tx_bits) - 1));
         assert(slice_lower_bits(addr, tx_bits) == 0); // check address alignment
         
         switch(int(type)){
@@ -108,7 +115,13 @@ public:
         // assert(addr == 0); // check address is within range
 
         // dispatch to the right channel
-        return ctrls[req.addr_vec[0]]->enqueue(req);
+        bool success = ctrls[req.addr_vec[0]]->enqueue(req);
+        if (success) {
+          reqCount++;
+          return true;
+        } else {
+          return false;
+        }
     }
 
     int pending_requests()

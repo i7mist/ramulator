@@ -8,6 +8,13 @@
 #include <cmath>
 
 namespace ramulator {
+
+class ScalarStat;
+class AverageStat;
+class VectorStat;
+class AverageVectorStat;
+} // namespace ramulator
+
 namespace Stats {
 
 typedef unsigned int size_type;
@@ -54,9 +61,14 @@ class Flags {
 class StatBase {
  public:
   virtual void print() = 0;
+
+  virtual size_type size() const = 0;
   virtual bool zero() const = 0;
   virtual void prepare() = 0;
   virtual void reset() = 0;
+
+  virtual VResult vresult() const { return VResult(); };
+  virtual Result total() const { return Result(); };
 };
 
 class StatList {
@@ -123,7 +135,7 @@ class Stat : public StatBase {
 
   virtual void print() {};
   virtual void printname() {
-    printf("%20s", _name.c_str());
+    printf("%10s", _name.c_str());
   }
 
   virtual void printdesc() {
@@ -139,13 +151,27 @@ class ScalarBase: public Stat<ScalarType> {
   virtual Result total() const = 0;
 
   size_type size() const {return 1;}
+  VResult vresult() const {return VResult(1, result());}
 
   virtual void print() {
     Stat<ScalarType>::printname();
     // TODO deal with flag & precision
-    printf("%10lf\n", Stat<ScalarType>::self().result());
+    printf("%10lf", Stat<ScalarType>::self().result());
     Stat<ScalarType>::printdesc();
   }
+};
+
+class ConstValue: public ScalarBase<ConstValue> {
+ private:
+  Counter _value;
+ public:
+  ConstValue(Counter __value):_value(__value){}
+  Counter value() const {return _value;}
+  Result result() const {return (Result)_value;}
+  Result total() const {return result();}
+  bool zero() const {return _value;}
+  void prepare() {}
+  void reset() {}
 };
 
 class Scalar: public ScalarBase<Scalar> {
@@ -230,7 +256,7 @@ class VectorBase: public Stat<Derived> {
     _size = __size;
     data.resize(size());
   }
-  size_type size() {return _size;}
+  size_type size() const {return _size;}
   // Copy the values to a local vector and return a reference to it.
   void value(VCounter& vec) const {
     vec.resize(size());
@@ -253,6 +279,9 @@ class VectorBase: public Stat<Derived> {
     }
     return sum;
   }
+
+  VResult vresult() const {return VResult(data);}
+
   bool check() const {
     // We don't separate storage and access as gem5 does.
     // So here is always true.
@@ -283,7 +312,7 @@ class VectorBase: public Stat<Derived> {
   }
   void print() {
     Stat<Derived>::printname();
-    printf("%lf\n", total());
+    printf("%10lf", total());
     Stat<Derived>::printdesc();
   }
 };
@@ -432,7 +461,7 @@ class Histogram: public Stat<Histogram> {
     logs = Counter();
   }
 
-  size_type size() {return param_buckets;}
+  size_type size() const {return param_buckets;}
 };
 
 class StandardDeviation: public Stat<StandardDeviation> {
@@ -481,10 +510,176 @@ class AverageDeviation: public Stat<AverageDeviation> {
   }
 };
 
-// class Formula: public Stat {
-// };
+class Op {
+ private:
+  std::string opstring;
+ public:
+  Op() {}
+  Op(std::string __opstring):opstring(__opstring){}
+  Result operator() (Result r) const {
+    if (opstring == "-") {
+      return -r;
+    } else {
+      assert("Unary operation can only be unary negation." && false);
+    }
+  }
+  Result operator() (Result l, Result r) const {
+    if (opstring == "+") {
+      return l + r;
+    } else if (opstring == "-") {
+      return l - r;
+    } else if (opstring == "*") {
+      return l * r;
+    } else if (opstring == "/") {
+      assert(fabs(r) > 1e-8 || "divide zero error");
+      return l / r;
+    } else {
+      assert("invalid binary opstring " && false);
+    }
+  }
+};
+
+// Node for constructing Formula
+class Temp {
+ private:
+  Op op;
+  std::vector<Temp*> operands;
+  const StatBase* leaf;
+  mutable VResult vres;
+ public:
+  Temp(Temp* val, std::string  __op):op(__op), leaf(nullptr) {
+    operands.push_back(val);
+  }
+  Temp(Temp* l, Temp* r, std::string __op):op(__op), leaf(nullptr) {
+    operands.push_back(l);
+    operands.push_back(r);
+  }
+  Temp(const Temp& val, std::string  __op):op(__op), leaf(nullptr) {
+    operands.push_back(new Temp(val));
+  }
+  Temp(const Temp& l, const Temp& r, std::string __op):op(__op), leaf(nullptr) {
+    operands.push_back(new Temp(l));
+    operands.push_back(new Temp(r));
+  }
+  Temp(const Scalar &s):op(), leaf(&s) {}
+  Temp(const Average &s):op(), leaf(&s) {}
+  Temp(const Vector &s):op(), leaf(&s) {}
+  Temp(const AverageVector &s):op(), leaf(&s) {}
+  Temp(const ramulator::ScalarStat &s);
+  Temp(const ramulator::AverageStat &s);
+  Temp(const ramulator::VectorStat &s);
+  Temp(const ramulator::AverageVectorStat &s);
+  Temp(signed char value):
+    op(), leaf(new ConstValue(value)) {}
+  Temp(unsigned char value):
+    op(), leaf(new ConstValue(value)) {}
+  Temp(signed short value):
+    op(), leaf(new ConstValue(value)) {}
+  Temp(unsigned short value):
+    op(), leaf(new ConstValue(value)) {}
+  Temp(signed int value):
+    op(), leaf(new ConstValue(value)) {}
+  Temp(unsigned int value):
+    op(), leaf(new ConstValue(value)) {}
+  Temp(signed long value):
+    op(), leaf(new ConstValue(value)) {}
+  Temp(unsigned long value):
+    op(), leaf(new ConstValue(value)) {}
+  Temp(signed long long value):
+    op(), leaf(new ConstValue(value)) {}
+  Temp(unsigned long long value):
+    op(), leaf(new ConstValue(value)) {}
+  Temp(float value):
+    op(), leaf(new ConstValue(value)) {}
+  Temp(double value):
+    op(), leaf(new ConstValue(value)) {}
+
+  VResult result() const;
+  Result total() const;
+  size_type size() const;
+
+  void destroy_descendants() {
+    for (off_type i = 0 ; i < operands.size() ; ++i) {
+      operands[i]->destroy_descendants();
+      delete operands[i];
+    }
+  }
+};
+
+
+class Formula: public Stat<Formula> {
+ private:
+   std::shared_ptr<Temp> root;
+ public:
+  Formula() {}
+  ~Formula() {
+    root->destroy_descendants();
+  }
+  Formula(Temp r) {
+    root = std::shared_ptr<Temp>(new Temp(r));
+  }
+  Formula &operator=(Temp r) {
+    if (root != nullptr) {
+      *root = r;
+    } else {
+      root = std::shared_ptr<Temp>(new Temp(r));
+    }
+    return self();
+  }
+  Formula &operator+=(Temp r) {
+    Temp* rvalue = new Temp(r);
+    root = std::shared_ptr<Temp>(new Temp(root.get(), rvalue, "+")) ;
+    return self();
+  }
+  Formula &operator/=(Temp r) {
+    Temp* rvalue = new Temp(r);
+    root = std::shared_ptr<Temp>(new Temp(root.get(), rvalue, "/"));
+    return self();
+  }
+  void result(VResult &vec) const {
+    VResult rvec = root->result();
+    vec.resize(rvec.size());
+    for (off_t i = 0 ; i < vec.size() ; ++i) {
+      vec[i] = rvec[i];
+    }
+  }
+  Result total() const {
+    if (root) {
+      return root->total();
+    } else {
+      return 0;
+    };
+  }
+  size_type size() const {
+    if (root) {
+      return root->size();
+    } else {
+      return 0;
+    }
+  }
+  bool zero() const {return root == nullptr;}
+  void prepare() {}
+  void reset() {
+    root.reset();
+  }
+
+  void print() {
+    Stat<Formula>::printname();
+    printf("%10lf", total());
+    Stat<Formula>::printdesc();
+  }
+};
 
 } // namespace Stats
-} // namespace ramulator
 
+namespace ramulator {
+
+Stats::Temp operator+ (const Stats::Temp &l, const Stats::Temp &r);
+Stats::Temp operator- (const Stats::Temp &r);
+
+Stats::Temp operator- (const Stats::Temp &l, const Stats::Temp &r);
+
+Stats::Temp operator* (const Stats::Temp &l, const Stats::Temp &r);
+Stats::Temp operator/ (const Stats::Temp &l, const Stats::Temp &r);
+}  // namespace ramulator
 #endif

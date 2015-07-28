@@ -1,6 +1,8 @@
 #ifndef __STATISTICS_H
 #define __STATISTICS_H
 
+#include <string>
+
 // FIXME Find better way to decide where does it come from
 #if !defined(RAMULATOR)
 #define INTEGRATED_WITH_GEM5
@@ -43,42 +45,53 @@
 
 namespace ramulator {
 
+// using Stats::+;
+// using Stats::-;
+// using Stats::*;
+// using Stats::/;
+
 template<class StatType>
 class StatBase { // wrapper for Stats::DataWrap
   protected:
     StatType stat;
-    string statName;
+    std::string statName;
 
     StatBase<StatType> & self() { return *this; }
   public:
     StatBase() {}
 
-    StatBase(string _name) {
+#ifndef INTEGRATED_WITH_GEM5
+    const StatType* get_stat() const {
+      return &stat;
+    }
+#endif
+
+    StatBase(std::string _name) {
       name(_name);
     }
 
-    StatBase(string _name, string _desc) {
+    StatBase(std::string _name, std::string _desc) {
       name(_name);
       desc(_desc);
     }
 
-    StatBase<StatType> & name(string _name) {
+    StatBase<StatType> & name(std::string _name) {
       statName = _name;
       stat.name("ramulator." + _name);
 
       return self();
     }
 
-    const string &name(void) const { return statName; }
+    const std::string &name(void) const { return statName; }
 
-    StatBase<StatType> & setSeparator(const string & _sep) {
+    StatBase<StatType> & setSeparator(const std::string & _sep) {
       stat.setSeparator(_sep);
       return self();
     }
 
-    const string &setSeparator() const { return stat.setSeparator(); }
+    const std::string &setSeparator() const { return stat.setSeparator(); }
 
-    StatBase<StatType> & desc(string _desc) {
+    StatBase<StatType> & desc(std::string _desc) {
       stat.desc(_desc);
       return self();
     }
@@ -111,12 +124,12 @@ class StatBaseVec : public StatBase<StatType> { // wrapper for Stats::DataWrapVe
     StatBaseVec<StatType> & self() { return *this; }
 
   public:
-    StatBaseVec<StatType> & subname(Stats::off_type index, const string & name) {
+    StatBaseVec<StatType> & subname(Stats::off_type index, const std::string & name) {
       StatBase<StatType>::stat.subname(index, name);
       return self();
     }
 
-    StatBaseVec<StatType> & subdesc(Stats::off_type index, const string & desc) {
+    StatBaseVec<StatType> & subdesc(Stats::off_type index, const std::string & desc) {
       StatBase<StatType>::stat.subdesc(index, desc);
       return self();
     }
@@ -226,30 +239,31 @@ class StandardDeviationStat : public DistStatBase<Stats::StandardDeviation> {
 class AverageDeviationStat : public DistStatBase<Stats::AverageDeviation> {
 };
 
-// class FormulaStat : public StatBaseVec<Stats::Formula> {
-//   public:
-//     FormulaStat(Stats::Temp r) {
-//       StatBase<Stats::Formula>::stat = r;
-//     }
-//
-//     const FormulaStat &operator= (Stats::Temp r) {
-//       StatBase<Stats::Formula>::stat = r;
-//       return *this;
-//     }
-//     const FormulaStat &operator+= (Stats::Temp r) {
-//       StatBase<Stats::Formula>::stat += r;
-//       return *this;
-//     }
-//     const FormulaStat &operator/= (Stats::Temp r) {
-//       StatBase<Stats::Formula>::stat /= r;
-//       return *this;
-//     }
-//
-//     void result(Stats::VResult &vec) const { StatBase<Stats::Formula>::stat.result(vec); }
-//
-//     Stats::Result total(void) const { return StatBase<Stats::Formula>::stat.total(); }
-// };
-//
+class FormulaStat : public StatBaseVec<Stats::Formula> {
+  public:
+    FormulaStat() {}
+    FormulaStat(Stats::Temp r) {
+      StatBase<Stats::Formula>::stat = r;
+    }
+
+    const FormulaStat &operator= (Stats::Temp r) {
+      StatBase<Stats::Formula>::stat = r;
+      return *this;
+    }
+    const FormulaStat &operator+= (Stats::Temp r) {
+      StatBase<Stats::Formula>::stat += r;
+      return *this;
+    }
+    const FormulaStat &operator/= (Stats::Temp r) {
+      StatBase<Stats::Formula>::stat /= r;
+      return *this;
+    }
+
+    void result(Stats::VResult &vec) const { StatBase<Stats::Formula>::stat.result(vec); }
+
+    Stats::Result total(void) const { return StatBase<Stats::Formula>::stat.total(); }
+};
+
 /*
   Stats TODO
   * VectorDistribution

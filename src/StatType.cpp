@@ -1,6 +1,29 @@
 #include "StatType.h"
 
 namespace ramulator {
+
+Stats::Temp operator+ (const Stats::Temp &l, const Stats::Temp &r) {
+    return Stats::Temp(l, r, "+");
+}
+
+Stats::Temp operator- (const Stats::Temp &r) {
+    return Stats::Temp(r, "-");
+}
+
+Stats::Temp operator- (const Stats::Temp &l, const Stats::Temp &r) {
+    return Stats::Temp(l, r, "-");
+}
+
+Stats::Temp operator* (const Stats::Temp &l, const Stats::Temp &r) {
+    return Stats::Temp(l, r, "*");
+}
+
+Stats::Temp operator/ (const Stats::Temp &l, const Stats::Temp &r) {
+    return Stats::Temp(l, r, "/");
+}
+
+} /* namespace ramulator */
+
 namespace Stats {
 
 // Statistics list
@@ -112,5 +135,123 @@ Histogram::add(Histogram *hs)
     for (uint32_t i = 0; i < b_size; i++)
         cvec[i] += hs->cvec[i];
 }
+
+VResult Temp::result() const {
+  if (operands.size() == 0) {
+    if (leaf != nullptr) {
+      return leaf->vresult();
+    } else {
+      return VResult();
+    }
+  } else {
+    if (operands.size() == 1) {
+      const VResult& v = operands[0]->result();
+      vres.resize(v.size());
+      for (off_type i = 0 ; i < vres.size() ; ++i) {
+        vres[i] = op(v[i]);
+      }
+      return vres;
+    } else if (operands.size() == 2) {
+      const VResult &lvec = operands[0]->result();
+      const VResult &rvec = operands[1]->result();
+
+      assert(lvec.size() > 0 && rvec.size() > 0);
+      assert(lvec.size() == rvec.size() ||
+             lvec.size() == 1 || rvec.size() == 1);
+
+      if (lvec.size() == 1 && rvec.size() == 1) {
+          vres.resize(1);
+          vres[0] = op(lvec[0], rvec[0]);
+      } else if (lvec.size() == 1) {
+          size_type size = rvec.size();
+          vres.resize(size);
+          for (off_type i = 0; i < size; ++i)
+              vres[i] = op(lvec[0], rvec[i]);
+      } else if (rvec.size() == 1) {
+          size_type size = lvec.size();
+          vres.resize(size);
+          for (off_type i = 0; i < size; ++i)
+              vres[i] = op(lvec[i], rvec[0]);
+      } else if (rvec.size() == lvec.size()) {
+          size_type size = rvec.size();
+          vres.resize(size);
+          for (off_type i = 0; i < size; ++i)
+              vres[i] = op(lvec[i], rvec[i]);
+      }
+
+      return vres;
+
+    } else {
+      assert("Only support unary/binary operation" && false);
+    }
+  }
+}
+
+Result Temp::total() const {
+  if (operands.size() == 0) {
+    assert(leaf != nullptr);
+    return leaf->total();
+  } else {
+    if (operands.size() == 1) {
+      const VResult &vec = this->result();
+      Result total = 0.0;
+      for (off_type i = 0 ; i < size() ; ++i) {
+        total += vec[i];
+      }
+      return total;
+    } else if (operands.size() == 2) {
+      const VResult &vec = this->result();
+      const VResult &lvec = operands[0]->result();
+      const VResult &rvec = operands[1]->result();
+      Result total = 0.0;
+      Result lsum = 0.0;
+      Result rsum = 0.0;
+
+      assert(lvec.size() > 0 && rvec.size() > 0);
+      assert(lvec.size() == rvec.size() ||
+             lvec.size() == 1 || rvec.size() == 1);
+
+      if (lvec.size() == rvec.size() && lvec.size() > 1) {
+        for (off_type i = 0 ; i < size() ; ++i) {
+          lsum += lvec[i];
+          rsum += rvec[i];
+        }
+        return op(lsum, rsum);
+      }
+
+      for (off_type i = 0 ; i < size() ; ++i) {
+        total += vec[i];
+      }
+
+      return total;
+
+    } else {
+      assert("Only support unary/binary operation...\n" && false);
+    }
+  }
+}
+
+size_type Temp::size() const {
+  if (operands.size() == 0) {
+    if (leaf) {
+      return leaf->size();
+    } else {
+      return 0;
+    }
+  } else if (operands.size() == 1) {
+    return operands[0]->size();
+  } else {
+    size_type ls = operands[0]->size();
+    size_type rs = operands[1]->size();
+    if (ls == 1) {
+        return rs;
+    } else if (rs == 1) {
+        return ls;
+    } else {
+        assert(ls == rs && "Node vector sizes are not equal");
+        return ls;
+    }
+  }
+}
+
 } /* namespace Stats */
-} /* namespace ramulator */

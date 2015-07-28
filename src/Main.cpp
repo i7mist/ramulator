@@ -83,7 +83,7 @@ int main (int argc, char** argv)
         }
         memory.tick();
         clks ++;
-        ramulator::Stats::curTick++; // memory clock, global, for Statistics
+        Stats::curTick++; // memory clock, global, for Statistics
     }
 
     /* report statistics */
@@ -95,7 +95,7 @@ int main (int argc, char** argv)
     printf("Simulation done %d clocks [%.3lfns], %d reads [%.3lf GB/s], %d writes [%.3lf GB/s]\n",
         clks, t, reads, rbw, writes, wbw);
 
-    ramulator::Stats::statlist.printall();
+    Stats::statlist.printall();
 
     /* histogram of read latencies */
     // long total_latency = 0;
@@ -137,7 +137,7 @@ double run_simulation(T *spec, std::vector<const char *> files,
     for (long i = 0; ; i++) {
         // if (i % 100000000 == 0) printf("%ld clocks\n", i);
         proc.tick();
-        ramulator::Stats::curTick++; // processor clock, global, for Statistics
+        Stats::curTick++; // processor clock, global, for Statistics
         if (i % cpu_tick == (cpu_tick - 1))
             for (int j = 0; j < mem_tick; j++)
                 memory.tick();

@@ -29,7 +29,7 @@ template <class T, template<typename> class Controller = Controller >
 class Memory : public MemoryBase
 {
 protected:
-   ScalarStat reqCount;
+   ScalarStat totReqCount;
 public:
     enum class Type {
         ChRaBaRoCo,
@@ -65,8 +65,9 @@ public:
             addr_bits[lev] = calc_log2(sz[lev]);
         addr_bits[int(T::Level::MAX) - 1] -= calc_log2(spec->prefetch_size);
 
-        reqCount.name("reqCount")
-                .desc("memory request Count.");
+        totReqCount.name("totReqCount")
+                   .desc("memory request Count.")
+                   .precision(0);
     }
 
     ~Memory()
@@ -117,7 +118,7 @@ public:
         // dispatch to the right channel
         bool success = ctrls[req.addr_vec[0]]->enqueue(req);
         if (success) {
-          reqCount++;
+          totReqCount++;
           return true;
         } else {
           return false;

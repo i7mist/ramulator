@@ -13,6 +13,7 @@
 #include "Refresh.h"
 #include "Request.h"
 #include "Scheduler.h"
+#include "Statistics.h"
 
 using namespace std;
 namespace ramulator
@@ -21,6 +22,10 @@ namespace ramulator
 template <typename T>
 class Controller
 {
+protected:
+   ScalarStat reqCount;
+   ScalarStat latencySum;
+   FormulaStat latencyAvg;
 public:
     /* Command trace for DRAMPower 3.1 */
     string cmd_trace_prefix = "cmd-trace-";
@@ -41,7 +46,7 @@ public:
         list<Request> q;
         int max = 32;
         int size() {return q.size();}
-    }; 
+    };
 
     Queue readq;  // queue for read requests
     Queue writeq;  // queue for write requests
@@ -65,6 +70,17 @@ public:
             for (int i = 0; i < channel->children.size(); i++)
                 cmd_trace_files.emplace_back(prefix + to_string(i) + suffix);
         }
+
+        // regStats
+        reqCount.name("reqCount")
+                .desc("request count for chan-" + to_string(channel->id))
+                .precision(0);
+        latencySum.name("latencySum")
+                  .desc("end-to-end memory request latency sum for chan-" + to_string(channel->id));
+        latencyAvg.name("latencyAvg")
+                  .desc("end-to-end memory request latency average for chan-" + to_string(channel->id));
+        latencyAvg = latencySum / reqCount;
+
     }
 
     ~Controller(){
@@ -98,12 +114,13 @@ public:
         queue.q.push_back(req);
         // shortcut for read requests, if a write to same addr exists
         // necessary for coherence
-        if (req.type == Request::Type::READ && find_if(writeq.q.begin(), writeq.q.end(), 
+        if (req.type == Request::Type::READ && find_if(writeq.q.begin(), writeq.q.end(),
                 [req](Request& wreq){ return req.addr == wreq.addr;}) != writeq.q.end()){
             req.depart = clk + 1;
             pending.push_back(req);
             readq.q.pop_back();
         }
+        reqCount++;
         return true;
     }
 
@@ -115,6 +132,8 @@ public:
         if (pending.size()) {
             Request& req = pending[0];
             if (req.depart <= clk) {
+                // FIXME update req.depart with clk
+                latencySum += req.depart - req.arrive;
                 req.callback(req);
                 pending.pop_front();
             }

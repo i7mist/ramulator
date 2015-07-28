@@ -3,6 +3,7 @@
 
 #include "DRAM.h"
 #include "Request.h"
+#include "Statistics.h"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -21,6 +22,10 @@ class SpeedyController
 // A FR-FCFS Open Row Controller, optimized for simulation speed.
 // Not For SALP-2
 {
+protected:
+   ScalarStat reqCount;
+   ScalarStat latencySum;
+   FormulaStat latencyAvg;
 private:
     class compair_depart_clk{
     public:
@@ -69,6 +74,16 @@ public:
         readq.reserve(queue_capacity);
         writeq.reserve(queue_capacity);
         otherq.reserve(queue_capacity);
+
+        // regStats
+        reqCount.name("reqCount")
+                .desc("request count for chan-" + to_string(channel->id))
+                .precision(0);
+        latencySum.name("latencySum")
+                  .desc("end-to-end memory request latency sum for chan-" + to_string(channel->id));
+        latencyAvg.name("latencyAvg")
+                  .desc("end-to-end memory request latency average for chan-" + to_string(channel->id));
+        latencyAvg = latencySum / reqCount;
     }
 
     ~SpeedyController(){
@@ -100,6 +115,7 @@ public:
         long first_clk = channel->get_next(first_cmd, req.addr_vec.data());
         q.emplace_back(req, first_cmd, first_clk);
         push_heap(q.begin(), q.end(), compair_first_clk);;
+        reqCount++;
         return true;
     }
 
@@ -112,6 +128,7 @@ public:
             Request req = pending.top();
             if (req.depart <= clk) {
                 req.depart = clk; // actual depart clk
+                latencySum += req.depart - req.arrive;
                 req.callback(req);
                 pending.pop();
             }

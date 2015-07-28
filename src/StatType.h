@@ -37,25 +37,17 @@ const uint16_t nozero    = 0x00000100;
 const uint16_t nonan     = 0x00000200;
 
 class Flags {
+ protected:
+  uint16_t flags;
  public:
   Flags(){}
   Flags(uint16_t flags):flags(flags){}
   void operator=(uint16_t _flags){flags = _flags;}
-  bool is_none();
-  bool is_total();
-  bool is_pdf();
-  bool is_nozero();
-  bool is_nonan();
-  bool is_cdf();
-
-  void set_none();
-  void set_total();
-  void set_pdf();
-  void set_nozero();
-  void set_nonan();
-  void set_cdf();
- protected:
-  uint16_t flags;
+  bool is_total() {return flags & total;}
+  bool is_pdf() {return flags & pdf;}
+  bool is_nozero() {return flags & nozero;}
+  bool is_nonan() {return flags & nonan;}
+  bool is_cdf() {return flags & cdf;}
 };
 
 class StatBase {
@@ -93,7 +85,7 @@ class Stat : public StatBase {
  protected:
   std::string _name;
   std::string _desc;
-  int _precision;
+  int _precision = 1;
   Flags _flags;
   std::string separatorString;
  public:
@@ -118,9 +110,11 @@ class Stat : public StatBase {
     _flags = __flags;
     return self();
   };
+
   template <class GenericStat>
   Derived &prereq(const GenericStat & prereq) {
     // TODO deal with prereq;
+    // only print the stat if the prereq is not zero.
     return self();
   }
 
@@ -128,18 +122,17 @@ class Stat : public StatBase {
     separatorString = str;
     return self();
   }
-  // TODO setSeparator
   const std::string& setSeparator() const {return separatorString;}
 
   size_type size() const { return 0; }
 
   virtual void print() {};
   virtual void printname() {
-    printf("%10s", _name.c_str());
+    printf("%s\t", _name.c_str());
   }
 
   virtual void printdesc() {
-    printf("# %s\n", _desc.c_str());
+    printf("\t# %s\n", _desc.c_str());
   }
 };
 
@@ -155,8 +148,8 @@ class ScalarBase: public Stat<ScalarType> {
 
   virtual void print() {
     Stat<ScalarType>::printname();
-    // TODO deal with flag & precision
-    printf("%10lf", Stat<ScalarType>::self().result());
+    // TODO deal with flag
+    printf("%10.*lf",Stat<ScalarType>::_precision, Stat<ScalarType>::self().result());
     Stat<ScalarType>::printdesc();
   }
 };
@@ -312,7 +305,7 @@ class VectorBase: public Stat<Derived> {
   }
   void print() {
     Stat<Derived>::printname();
-    printf("%10lf", total());
+    printf("%10.*lf", Stat<Derived>::_precision, total());
     Stat<Derived>::printdesc();
   }
 };
@@ -435,7 +428,6 @@ class Histogram: public Stat<Histogram> {
     reset();
   }
 
-  // TODO Histogram method
   void grow_up();
   void grow_out();
   void grow_convert();
@@ -665,7 +657,7 @@ class Formula: public Stat<Formula> {
 
   void print() {
     Stat<Formula>::printname();
-    printf("%10lf", total());
+    printf("%10.*lf", Stat<Formula>::_precision, total());
     Stat<Formula>::printdesc();
   }
 };

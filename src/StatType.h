@@ -86,7 +86,7 @@ class Stat : public StatBase {
   std::string _name;
   std::string _desc;
   int _precision = 1;
-  Flags _flags;
+  Flags _flags = 0;
   std::string separatorString;
  public:
   Stat() {
@@ -159,19 +159,7 @@ class ConstValue: public ScalarBase<ConstValue> {
   Counter _value;
  public:
   ConstValue(Counter __value):_value(__value){}
-  Counter value() const {return _value;}
-  Result result() const {return (Result)_value;}
-  Result total() const {return result();}
-  bool zero() const {return _value;}
-  void prepare() {}
-  void reset() {}
-};
 
-class Scalar: public ScalarBase<Scalar> {
- private:
-  Counter _value;
- public:
-  Scalar():_value(0) {}
   void operator ++ () { ++_value; }
   void operator -- () { --_value; }
   void operator ++ (int) { _value++; }
@@ -186,9 +174,38 @@ class Scalar: public ScalarBase<Scalar> {
   template <typename U>
   void operator -= (const U &v) { _value -= v;}
 
+
+  Counter value() const {return _value;}
+  Result result() const {return (Result)_value;}
+  Result total() const {return result();}
+  bool zero() const {return _value;}
+  void prepare() {}
+  void reset() {}
+};
+
+class Scalar: public ScalarBase<Scalar> {
+ private:
+  Counter _value;
+ public:
+  Scalar():_value(0) {}
   Counter value() const {return _value;}
   Result result() const {return (Result)_value;}
   Result total() const {return (Result)_value;}
+
+  void operator ++ () { ++_value; }
+  void operator -- () { --_value; }
+  void operator ++ (int) { _value++; }
+  void operator -- (int) { _value--; }
+
+  template <typename U>
+  void operator = (const U &v) { _value = v; }
+
+  template <typename U>
+  void operator += (const U &v) { _value += v;}
+
+  template <typename U>
+  void operator -= (const U &v) { _value -= v;}
+
 
   virtual bool zero() const {return _value == Counter();}
   void prepare() {}
@@ -218,6 +235,20 @@ class Average: public ScalarBase<Average> {
   void dec(Counter val) {
     set(current - val);
   }
+  void operator ++ () { inc(1); }
+  void operator -- () { dec(1); }
+  void operator ++ (int) { inc(1); }
+  void operator -- (int) { dec(1); }
+
+  template <typename U>
+  void operator = (const U &v) { set(v); }
+
+  template <typename U>
+  void operator += (const U &v) { inc(v);}
+
+  template <typename U>
+  void operator -= (const U &v) { dec(v);}
+
 
   bool zero() const { return total_val == 0.0; }
   void prepare() {
@@ -241,7 +272,7 @@ class Average: public ScalarBase<Average> {
 template<class Derived, class Element>
 class VectorBase: public Stat<Derived> {
  private:
-  size_type _size;
+  size_type _size = 0;
   std::vector<Element> data;
 
  public:
@@ -273,13 +304,20 @@ class VectorBase: public Stat<Derived> {
     return sum;
   }
 
-  VResult vresult() const {return VResult(data);}
+  VResult vresult() const {
+    VResult vres;
+    for (off_type i = 0 ; i < size() ; ++i) {
+      vres[i] = data[i].result();
+    }
+    return vres;
+  }
 
   bool check() const {
     // We don't separate storage and access as gem5 does.
     // So here is always true.
     return true;
   }
+
   Element &operator[](off_type index) {
     assert(index >= 0 && index < size());
     return data[index];
@@ -287,12 +325,13 @@ class VectorBase: public Stat<Derived> {
 
   bool zero() const {
     for (off_type i = 0 ; i < size() ; ++i) {
-      if (data[i]->zero()) {
+      if (data[i].zero()) {
         return false;
       }
-      return true;
     }
+    return true;
   }
+
   void prepare() {
     for (off_type i = 0 ; i < size() ; ++i) {
       data[i].prepare();
@@ -347,6 +386,8 @@ class Distribution: public Stat<Distribution> {
   VCounter cvec;
 
  public:
+  Distribution():param_min(Counter()), param_max(Counter()),
+      param_bucket_size(Counter()) { reset(); }
   void init(Counter min, Counter max, Counter bkt) {
     param_min = min;
     param_max = max;
@@ -419,6 +460,7 @@ class Histogram: public Stat<Histogram> {
   VCounter cvec;
 
  public:
+  Histogram():param_buckets(0) { reset(); }
   Histogram(size_type __buckets) {
     init(__buckets);
   }
@@ -432,6 +474,7 @@ class Histogram: public Stat<Histogram> {
   void grow_out();
   void grow_convert();
   void add(Histogram* hs);
+  void sample(Counter val, int number);
 
   bool zero() const {
     return samples == Counter();

@@ -155,10 +155,10 @@ class ScalarStatBase : public StatBase<StatType> { // wrapper for Stats::ScalarB
     void operator-=(const U &v) { StatBase<StatType>::stat -= v; }
 };
 
-template<class StatType>
+template<class StatType, class Element>
 class VectorStatBase : public StatBaseVec<StatType> { // wrapper for Stats::VectorBase
   protected:
-    VectorStatBase<StatType> & self() { return *this; }
+    VectorStatBase<StatType, Element> & self() { return *this; }
 
   public:
     void value(Stats::VCounter & vec) const { StatBase<StatType>::stat.value(vec); }
@@ -167,7 +167,7 @@ class VectorStatBase : public StatBaseVec<StatType> { // wrapper for Stats::Vect
 
     bool check(void) const { return StatBase<StatType>::stat.check(); }
 
-    VectorStatBase<StatType> & init(Stats::size_type size) {
+    VectorStatBase<StatType, Element> & init(Stats::size_type size) {
       StatBase<StatType>::stat.init(size);
       return self();
     }
@@ -175,7 +175,7 @@ class VectorStatBase : public StatBaseVec<StatType> { // wrapper for Stats::Vect
 #ifdef INTEGRATED_WITH_GEM5
     Stats::ScalarProxy<StatType> operator[](Stats::off_type index) { return StatBase<StatType>::stat[index]; }
 #else
-    StatType &operator[](Stats::off_type index) { return StatBase<StatType>::stat[index]; }
+    Element &operator[](Stats::off_type index) { return StatBase<StatType>::stat[index]; }
 #endif
 };
 
@@ -204,10 +204,10 @@ class AverageStat : public ScalarStatBase<Stats::Average> {
     using StatBase<Stats::Average>::operator=;
 };
 
-class VectorStat : public VectorStatBase<Stats::Vector> {
+class VectorStat : public VectorStatBase<Stats::Vector, Stats::Scalar> {
 };
 
-class AverageVectorStat : public VectorStatBase<Stats::AverageVector> {
+class AverageVectorStat : public VectorStatBase<Stats::AverageVector, Stats::Average> {
 };
 
 class DistributionStat : public DistStatBase<Stats::Distribution> {

@@ -136,6 +136,38 @@ Histogram::add(Histogram *hs)
         cvec[i] += hs->cvec[i];
 }
 
+void
+Histogram::sample(Counter val, int number)
+{
+    assert(min_bucket < max_bucket);
+    if (val < min_bucket) {
+        if (min_bucket == 0)
+            grow_convert();
+
+        while (val < min_bucket)
+            grow_out();
+    } else if (val >= max_bucket + bucket_size) {
+        if (min_bucket == 0) {
+            while (val >= max_bucket + bucket_size)
+                grow_up();
+        } else {
+            while (val >= max_bucket + bucket_size)
+                grow_out();
+        }
+    }
+
+    size_type index =
+        (int64_t)std::floor((val - min_bucket) / bucket_size);
+
+    assert(index >= 0 && index < size());
+    cvec[index] += number;
+
+    sum += val * number;
+    squares += val * val * number;
+    logs += log(val) * number;
+    samples += number;
+}
+
 VResult Temp::result() const {
   if (operands.size() == 0) {
     if (leaf != nullptr) {

@@ -28,7 +28,7 @@ typedef std::numeric_limits<Counter> CounterLimits;
 
 // Flags
 const uint16_t init      = 0x00000001;
-const uint16_t printable = 0x00000002;
+const uint16_t display   = 0x00000002;
 const uint16_t total     = 0x00000010;
 const uint16_t pdf       = 0x00000020;
 const uint16_t cdf       = 0x00000040;
@@ -43,11 +43,12 @@ class Flags {
   Flags(){}
   Flags(uint16_t flags):flags(flags){}
   void operator=(uint16_t _flags){flags = _flags;}
-  bool is_total() {return flags & total;}
-  bool is_pdf() {return flags & pdf;}
-  bool is_nozero() {return flags & nozero;}
-  bool is_nonan() {return flags & nonan;}
-  bool is_cdf() {return flags & cdf;}
+  bool is_total() const {return flags & total;}
+  bool is_pdf() const {return flags & pdf;}
+  bool is_nozero() const {return flags & nozero;}
+  bool is_nonan() const {return flags & nonan;}
+  bool is_cdf() const {return flags & cdf;}
+  bool is_display() const {return flags & display;}
 };
 
 class StatBase {
@@ -61,6 +62,8 @@ class StatBase {
 
   virtual VResult vresult() const { return VResult(); };
   virtual Result total() const { return Result(); };
+
+  virtual bool is_display() const  = 0;
 };
 
 class StatList {
@@ -72,8 +75,10 @@ class StatList {
   }
   void printall() {
     for(int i = 0 ; i < list.size() ; ++i) {
-      list[i]->prepare();
-      list[i]->print();
+      if (list[i]->is_display()) {
+        list[i]->prepare();
+        list[i]->print();
+      }
     }
   }
 };
@@ -86,7 +91,7 @@ class Stat : public StatBase {
   std::string _name;
   std::string _desc;
   int _precision = 1;
-  Flags _flags = 0;
+  Flags _flags = display;
   std::string separatorString;
  public:
   Stat() {
@@ -133,6 +138,10 @@ class Stat : public StatBase {
 
   virtual void printdesc() {
     printf("\t# %s\n", _desc.c_str());
+  }
+
+  virtual bool is_display() const {
+    return _flags.is_display();
   }
 };
 
@@ -279,6 +288,9 @@ class VectorBase: public Stat<Derived> {
   void init(size_type __size) {
     _size = __size;
     data.resize(size());
+    for (off_type i = 0 ; i < size() ; ++i) {
+      data[i].flags(0);
+    }
   }
   size_type size() const {return _size;}
   // Copy the values to a local vector and return a reference to it.
@@ -393,6 +405,7 @@ class Distribution: public Stat<Distribution> {
     param_max = max;
     param_bucket_size = bkt;
     param_buckets = (size_type)ceil((max - min + 1.0) / bkt);
+    cvec.resize(param_buckets);
 
     reset();
   }
@@ -443,6 +456,31 @@ class Distribution: public Stat<Distribution> {
     squares = Counter();
     samples = Counter();
   };
+  void add(Distribution &d) {
+    int d_size = d.size();
+    assert(size() == d_size);
+    assert(min_track == d.min_track);
+    assert(max_track == d.max_track);
+
+    underflow += d.underflow;
+    overflow += d.overflow;
+
+    sum += d.sum;
+    squares += d.squares;
+    samples += d.samples;
+
+    if (d.min_val < min_val) {
+      min_val = d.min_val;
+    }
+
+    if (d.max_val > max_val) {
+      max_val = d.max_val;
+    }
+
+    for (off_type i = 0 ; i < d_size ; ++i) {
+      cvec[i] += d.cvec[i];
+    }
+  }
 };
 
 class Histogram: public Stat<Histogram> {
@@ -461,7 +499,7 @@ class Histogram: public Stat<Histogram> {
 
  public:
   Histogram():param_buckets(0) { reset(); }
-  Histogram(size_type __buckets) {
+  Histogram(size_type __buckets):cvec(__buckets) {
     init(__buckets);
   }
   void init(size_type __buckets) {
@@ -473,7 +511,7 @@ class Histogram: public Stat<Histogram> {
   void grow_up();
   void grow_out();
   void grow_convert();
-  void add(Histogram* hs);
+  void add(Histogram& hs);
   void sample(Counter val, int number);
 
   bool zero() const {
@@ -522,6 +560,11 @@ class StandardDeviation: public Stat<StandardDeviation> {
     squares = Counter();
     samples = Counter();
   }
+  void add(StandardDeviation& sd) {
+    sum += sd.sum;
+    squares += sd.squares;
+    samples += sd.samples;
+  }
 };
 
 class AverageDeviation: public Stat<AverageDeviation> {
@@ -542,6 +585,10 @@ class AverageDeviation: public Stat<AverageDeviation> {
   void reset() {
     sum = Counter();
     squares = Counter();
+  }
+  void add(AverageDeviation& ad) {
+    sum += ad.sum;
+    squares += ad.squares;
   }
 };
 

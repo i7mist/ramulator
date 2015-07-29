@@ -45,11 +45,6 @@
 
 namespace ramulator {
 
-// using Stats::+;
-// using Stats::-;
-// using Stats::*;
-// using Stats::/;
-
 template<class StatType>
 class StatBase { // wrapper for Stats::DataWrap
   protected:

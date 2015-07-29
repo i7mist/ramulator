@@ -53,6 +53,8 @@ class Flags {
 
 class StatBase {
  public:
+  // TODO implement print for Distribution, Histogram,
+  // AverageDeviation, StandardDeviation
   virtual void print() = 0;
 
   virtual size_type size() const = 0;

@@ -63,7 +63,8 @@ public:
   int latency_each[int(Level::MAX)] = {4, 12, 31};
 
   std::shared_ptr<CacheSystem> cachesys;
-  Cache* higher_cache;
+  // LLC has multiple higher caches
+  std::vector<Cache*> higher_cache;
   Cache* lower_cache;
 
   bool send(Request req);

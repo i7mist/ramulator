@@ -32,7 +32,7 @@ Processor::Processor(vector<const char*> trace_list,
     }
   }
   for (int i = 0 ; i < tracenum ; ++i) {
-    cores[i].callback = std::bind(&Core::receive, &cores[i],
+    cores[i].callback = std::bind(&Processor::receive, this,
         placeholders::_1);
   }
 }
@@ -43,6 +43,15 @@ void Processor::tick() {
   }
   for (auto& core : cores) {
     core.tick();
+  }
+}
+
+void Processor::receive(Request& req) {
+  if (!no_shared_cache) {
+    llc.callback(req);
+  }
+  for (auto& core : cores) {
+    core.receive(req);
   }
 }
 
@@ -158,11 +167,7 @@ bool Core::finished()
 void Core::receive(Request& req)
 {
     window.set_ready(req.addr, ~(l1_blocksz - 1l));
-    if (llc != nullptr) {
-      llc->callback(req);
-    }
 }
-
 
 bool Window::is_full()
 {

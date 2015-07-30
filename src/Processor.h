@@ -95,6 +95,7 @@ public:
     Processor(vector<const char*> trace_list,
         function<bool(Request)> send, bool early_exit);
     void tick();
+    void receive(Request& req);
     bool finished();
 
     std::vector<Core> cores;

@@ -16,7 +16,7 @@ namespace ramulator
 Cache::Cache(int size, int assoc, int block_size,
     int mshr_entry_num, Level level,
     std::shared_ptr<CacheSystem> cachesys):
-    level(level), cachesys(cachesys), higher_cache(nullptr),
+    level(level), cachesys(cachesys), higher_cache(0),
     lower_cache(nullptr), size(size), assoc(assoc),
     block_size(block_size), mshr_entry_num(mshr_entry_num) {
 
@@ -132,8 +132,11 @@ std::pair<long, bool> Cache::invalidate(long addr) {
   long delay = latency_each[int(level)];
   bool dirty = false;
 
-  auto it = cache_lines.find(get_index(addr));
-  auto& lines = it->second;
+  auto& lines = get_lines(addr);
+  if (lines.size() == 0) {
+    // The line of this address doesn't exist.
+    return make_pair(0, false);
+  }
   auto line = find_if(lines.begin(), lines.end(),
       [addr, this](Line l){return (l.tag == get_tag(addr));});
 
@@ -147,14 +150,18 @@ std::pair<long, bool> Cache::invalidate(long addr) {
     return make_pair(delay, false);
   }
 
-  if (higher_cache != nullptr) {
-    auto result = higher_cache->invalidate(addr);
-    if (result.second) {
-      delay += result.first * 2;
-    } else {
-      delay += result.first;
+  if (higher_cache.size()) {
+    long max_delay = delay;
+    for (auto hc : higher_cache) {
+      auto result = hc->invalidate(addr);
+      if (result.second) {
+        max_delay = max(max_delay, delay + result.first * 2);
+      } else {
+        max_delay = max(max_delay, delay + result.first);
+      }
+      dirty = dirty || line->dirty || result.second;
     }
-    dirty = line->dirty || result.second;
+    delay = max_delay;
   } else {
     dirty = line->dirty;
   }
@@ -171,10 +178,13 @@ void Cache::evict(std::list<Line>* lines,
   bool dirty = victim->dirty;
 
   // First invalidate the victim line in higher level.
-  if (higher_cache != nullptr) {
-    auto result = higher_cache->invalidate(addr);
-    invalidate_time = result.first + (result.second ? latency_each[int(level)] : 0);
-    dirty = result.second || victim->dirty;
+  if (higher_cache.size()) {
+    for (auto hc : higher_cache) {
+      auto result = hc->invalidate(addr);
+      invalidate_time = max(invalidate_time,
+          result.first + (result.second ? latency_each[int(level)] : 0));
+      dirty = dirty || result.second || victim->dirty;
+    }
   }
 
   debug("invalidate delay: %ld, dirty: %s", invalidate_time,
@@ -236,7 +246,7 @@ bool Cache::is_hit(std::list<Line>& lines, long addr,
 void Cache::concatlower(Cache* lower) {
   lower_cache = lower;
   assert(lower != nullptr);
-  lower->higher_cache = this;
+  lower->higher_cache.push_back(this);
 };
 
 bool Cache::need_eviction(const std::list<Line>& lines, long addr) {
@@ -268,8 +278,10 @@ void Cache::callback(Request& req) {
     mshr_entries.erase(it);
   }
 
-  if (higher_cache != nullptr) {
-    higher_cache->callback(req);
+  if (higher_cache.size()) {
+    for (auto hc : higher_cache) {
+      hc->callback(req);
+    }
   }
 }
 

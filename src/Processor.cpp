@@ -15,10 +15,10 @@ Processor::Processor(vector<const char*> trace_list,
   assert(cachesys != nullptr);
   int tracenum = trace_list.size();
   assert(tracenum > 0);
-  printf("tracenum: %d\n", tracenum);
-  for (int i = 0 ; i < tracenum ; ++i) {
-    printf("trace_list[%d]: %s\n", i, trace_list[i]);
-  }
+//   printf("tracenum: %d\n", tracenum);
+//   for (int i = 0 ; i < tracenum ; ++i) {
+//     printf("trace_list[%d]: %s\n", i, trace_list[i]);
+//   }
   if (no_shared_cache) {
     for (int i = 0 ; i < tracenum ; ++i) {
       cores.emplace_back(
@@ -61,6 +61,8 @@ bool Processor::finished() {
       if (cores[i].finished()) {
         for (unsigned int j = 0 ; j < cores.size() ; ++j) {
           ipc += cores[j].calc_ipc();
+          cpi += cores[j].calc_cpi();
+          printf("%.5lf\n", cpi);
         }
         return true;
       }
@@ -112,8 +114,14 @@ Core::Core(int coreid, const char* trace_fname,
 
 double Core::calc_ipc()
 {
-    printf("[%d]retired: %ld, clk, %ld\n", id, retired, clk);
+//     printf("[%d]retired: %ld, clk, %ld\n", id, retired, clk);
     return (double) retired / clk;
+}
+
+double Core::calc_cpi()
+{
+//     printf("[%d]retired: %ld, clk, %ld\n", id, retired, clk);
+    return (double) clk / retired;
 }
 
 void Core::tick()
@@ -140,15 +148,15 @@ void Core::tick()
         if (window.is_full()) return;
 
         Request req(req_addr, req_type, callback);
-        if (!send(req)) return;
+//         if (!send(req)) return;
 
-        window.insert(false, req_addr);
+        window.insert(true, req_addr);
     }
     else {
         // write request
         assert(req_type == Request::Type::WRITE);
         Request req(req_addr, req_type, callback);
-        if (!send(req)) return;
+//         if (!send(req)) return;
     }
 
     if (no_core_caches) {

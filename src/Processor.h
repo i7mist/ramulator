@@ -62,6 +62,7 @@ public:
     void tick();
     void receive(Request& req);
     double calc_ipc();
+    double calc_cpi();
     bool finished();
     function<void(Request&)> callback;
 
@@ -101,6 +102,7 @@ public:
     std::vector<Core> cores;
     std::vector<double> ipcs;
     double ipc = 0;
+    double cpi = 0;
 
     // When early_exit is true, the simulation exits when
     // the earliest trace finishes.

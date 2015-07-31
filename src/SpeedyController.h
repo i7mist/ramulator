@@ -24,8 +24,8 @@ class SpeedyController
 // Not For SALP-2
 {
 protected:
-   ScalarStat reqCount;
-   ScalarStat latencySum;
+  ScalarStat row_hit;
+  ScalarStat row_miss;
 private:
     class compair_depart_clk{
     public:
@@ -76,11 +76,17 @@ public:
         otherq.reserve(queue_capacity);
 
         // regStats
-        reqCount.name("reqCount")
-                .desc("request count for chan-" + to_string(channel->id))
-                .precision(0);
-        latencySum.name("latencySum")
-                  .desc("end-to-end memory request latency sum for chan-" + to_string(channel->id));
+
+        row_hit
+            .name("row_hit_channel_"+to_string(channel->id))
+            .desc("Number of row hits")
+            .precision(0)
+            ;
+        row_miss
+            .name("row_miss_channel_"+to_string(channel->id))
+            .desc("Number of row misses")
+            .precision(0)
+            ;
     }
 
     ~SpeedyController(){
@@ -112,7 +118,6 @@ public:
         long first_clk = channel->get_next(first_cmd, req.addr_vec.data());
         q.emplace_back(req, first_cmd, first_clk);
         push_heap(q.begin(), q.end(), compair_first_clk);;
-        reqCount++;
         return true;
     }
 
@@ -125,7 +130,6 @@ public:
             Request req = pending.top();
             if (req.depart <= clk) {
                 req.depart = clk; // actual depart clk
-                latencySum += req.depart - req.arrive;
                 req.callback(req);
                 pending.pop();
             }
@@ -163,6 +167,12 @@ public:
         request_queue& q = otherq.size()? otherq: write_mode ? writeq : readq;
 
         schedule(q);
+    }
+
+    bool is_row_hit(Request& req)
+    {
+        typename T::Command cmd = get_first_cmd(req);
+        return channel->check_row_hit(cmd, req.addr_vec.data());
     }
 
 private:
@@ -215,6 +225,16 @@ private:
         long first_clk = get<2>(q[0]);
 
         if (first_clk > clk) return;
+
+        if (req.is_first_command) {
+            req.is_first_command = false;
+            if (req.type == Request::Type::READ || req.type == Request::Type::WRITE) {
+                if (is_row_hit(req))
+                    ++row_hit;
+                else
+                    ++row_miss;
+            }
+        }
 
         issue_cmd(first_cmd, req.addr_vec.data());
 

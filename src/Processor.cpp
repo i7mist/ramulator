@@ -148,15 +148,15 @@ void Core::tick()
         if (window.is_full()) return;
 
         Request req(req_addr, req_type, callback);
-//         if (!send(req)) return;
+        if (!send(req)) return;
 
-        window.insert(true, req_addr);
+        window.insert(false, req_addr);
     }
     else {
         // write request
         assert(req_type == Request::Type::WRITE);
         Request req(req_addr, req_type, callback);
-//         if (!send(req)) return;
+        if (!send(req)) return;
     }
 
     if (no_core_caches) {

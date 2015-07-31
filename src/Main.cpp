@@ -162,60 +162,60 @@ int main(int argc, const char *argv[])
 
     vector<const char*> files(&argv[1], &argv[argc]);
 //     double baseIPC, IPC;
-    DDR3* ddr3 = new DDR3(DDR3::Org::DDR3_8Gb_x8, DDR3::Speed::DDR3_1333H);
+    DDR3* ddr3 = new DDR3(DDR3::Org::DDR3_8Gb_x16, DDR3::Speed::DDR3_1333H);
     printf("%10s, ", "DDR3");
     run_simulation(ddr3, files, 1, 1, 4, 1);
 
 //     DDR4* ddr4 = new DDR4(DDR4::Org::DDR4_4Gb_x8, DDR4::Speed::DDR4_2400R);
 //     IPC = run_simulation(ddr4, files, 1, 1, 8, 3);
 //     printf("%10s: %.5lf\n", "DDR4", IPC / baseIPC);
-// 
+//
 //     SALP* salp8 = new SALP(SALP::Org::SALP_4Gb_x8, SALP::Speed::SALP_1600K, SALP::Type::MASA, 8);
 //     IPC = run_simulation(salp8, files, 1, 1, 4, 1);
 //     printf("%10s: %.5lf\n", "SALP", IPC / baseIPC);
-// 
+//
 //     LPDDR3* lpddr3 = new LPDDR3(LPDDR3::Org::LPDDR3_8Gb_x16, LPDDR3::Speed::LPDDR3_1600);
 //     IPC = run_simulation(lpddr3, files, 1, 1, 4, 1);
 //     printf("%10s: %.5lf\n", "LPDDR3", IPC / baseIPC);
-// 
+//
 //     // total cap: 2GB, 1/2 of others
 //     LPDDR4* lpddr4 = new LPDDR4(LPDDR4::Org::LPDDR4_8Gb_x16, LPDDR4::Speed::LPDDR4_2400);
 //     IPC = run_simulation(lpddr4, files, 2, 1, 8, 3);
 //     printf("%10s: %.5lf\n", "LPDDR4", IPC / baseIPC);
-// 
+//
 //     GDDR5* gddr5 = new GDDR5(GDDR5::Org::GDDR5_8Gb_x16, GDDR5::Speed::GDDR5_6000);
 //     IPC = run_simulation(gddr5, files, 1, 1, 2, 1); //6400 overclock
 //     printf("%10s: %.5lf\n", "GDDR5", IPC / baseIPC);
-// 
+//
 //     HBM* hbm = new HBM(HBM::Org::HBM_4Gb, HBM::Speed::HBM_1Gbps);
 //     IPC = run_simulation(hbm, files, 8, 1, 32, 5);
 //     printf("%10s: %.5lf\n", "HBM", IPC / baseIPC);
-// 
+//
 //     // total cap: 1GB, 1/4 of others
 //     WideIO* wio = new WideIO(WideIO::Org::WideIO_8Gb, WideIO::Speed::WideIO_266);
 //     IPC = run_simulation(wio, files, 4, 1, 12, 1);
 //     printf("%10s: %.5lf\n", "WideIO", IPC / baseIPC);
-// 
+//
 //     // total cap: 2GB, 1/2 of others
 //     WideIO2* wio2 = new WideIO2(WideIO2::Org::WideIO2_8Gb, WideIO2::Speed::WideIO2_1066);
 //     wio2->channel_width *= 2;
 //     IPC = run_simulation(wio2, files, 8, 1, 6, 1);
 //     printf("%10s: %.5lf\n", "WideIO2", IPC / baseIPC);
-// 
+//
 //     // Various refresh mechanisms
 //     DSARP* dsddr3_dsarp = new DSARP(DSARP::Org::DSARP_8Gb_x8,
 //         DSARP::Speed::DSARP_1333, DSARP::Type::DSARP, 8);
 //     IPC = run_simulation(dsddr3_dsarp, files, 1, 1, 4, 1);
 //     printf("%10s: %.5lf\n", "DSARP", IPC / baseIPC);
-// 
+//
 //     ALDRAM* aldram = new ALDRAM(ALDRAM::Org::ALDRAM_4Gb_x8, ALDRAM::Speed::ALDRAM_1600K);
 //     IPC = run_simulation(aldram, files, 1, 1, 4, 1);
 //     printf("%10s: %.5lf\n", "ALDRAM", IPC / baseIPC);
-// 
+//
 //     TLDRAM* tldram = new TLDRAM(TLDRAM::Org::TLDRAM_4Gb_x8, TLDRAM::Speed::TLDRAM_1600K, 16);
 //     IPC = run_simulation(tldram, files, 1, 1, 4, 1);
 //     printf("%10s: %.5lf\n", "TLDRAM", IPC / baseIPC);
-// 
+//
     return 0;
 }
 #endif /*test spec2006*/

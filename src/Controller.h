@@ -135,8 +135,6 @@ public:
         if (pending.size()) {
             Request& req = pending[0];
             if (req.depart <= clk) {
-                // FIXME update req.depart with clk
-                req.depart = clk;
                 req.callback(req);
                 pending.pop_front();
             }

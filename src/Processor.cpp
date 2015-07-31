@@ -59,11 +59,13 @@ bool Processor::finished() {
   if (early_exit) {
     for (unsigned int i = 0 ; i < cores.size(); ++i) {
       if (cores[i].finished()) {
+        double mcpi = 0;
         for (unsigned int j = 0 ; j < cores.size() ; ++j) {
           ipc += cores[j].calc_ipc();
           cpi += cores[j].calc_cpi();
-          printf("%.5lf\n", cpi);
+          mcpi += cores[j].calc_mcpi();
         }
+        printf("%.5lf, %.5lf\n", cpi, mcpi);
         return true;
       }
     }
@@ -124,6 +126,10 @@ double Core::calc_cpi()
     return (double) clk / retired;
 }
 
+double Core::calc_mcpi() {
+  return (double) memory_access_cycles / retired;
+}
+
 void Core::tick()
 {
     clk++;
@@ -174,7 +180,11 @@ bool Core::finished()
 }
 void Core::receive(Request& req)
 {
-    window.set_ready(req.addr, ~(l1_blocksz - 1l));
+  window.set_ready(req.addr, ~(l1_blocksz - 1l));
+  if (req.depart > last) {
+    memory_access_cycles += req.depart - max(last, req.arrive);
+    last = req.depart;
+  }
 }
 
 bool Window::is_full()

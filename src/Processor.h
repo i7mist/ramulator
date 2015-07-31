@@ -63,6 +63,7 @@ public:
     void receive(Request& req);
     double calc_ipc();
     double calc_cpi();
+    double calc_mcpi();
     bool finished();
     function<void(Request&)> callback;
 
@@ -89,6 +90,9 @@ private:
     long req_addr;
     Request::Type req_type;
     bool more_reqs;
+
+    long memory_access_cycles;
+    long last = 0;
 };
 
 class Processor {

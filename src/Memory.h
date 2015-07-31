@@ -30,7 +30,9 @@ template <class T, template<typename> class Controller = Controller >
 class Memory : public MemoryBase
 {
 protected:
-   ScalarStat totReqCount;
+  ScalarStat num_dram_cycles;
+  ScalarStat num_incoming_requests;
+  VectorStat incoming_requests_per_channel;
 public:
     enum class Type {
         ChRaBaRoCo,
@@ -66,19 +68,35 @@ public:
         // initialized. However the initialization does not update the channel
         // and rank count in org_entry.count (*sz), and it's not supposed to.
         for (unsigned int lev = 0; lev < addr_bits.size(); lev++) {
-            if (lev == int(T::Level::Channel))
+            if (lev == int(T::Level::Channel)) {
               addr_bits[lev] = calc_log2(ctrls.size());
-            else if (lev == int(T::Level::Rank))
+              sz[lev] = ctrls.size();
+            }
+            else if (lev == int(T::Level::Rank)) {
               addr_bits[lev] = calc_log2(ctrls[0]->channel->children.size());
+              sz[lev] = ctrls[0]->channel->children.size();
+            }
             else
               addr_bits[lev] = calc_log2(sz[lev]);
         }
 
         addr_bits[int(T::Level::MAX) - 1] -= calc_log2(spec->prefetch_size);
 
-        totReqCount.name("totReqCount")
-                   .desc("memory request Count.")
-                   .precision(0);
+        num_dram_cycles
+            .name("dram_cycles")
+            .desc("Number of DRAM cycles simulated")
+            .precision(0)
+            ;
+        num_incoming_requests
+            .name("incoming_requests")
+            .desc("Number of incoming requests to DRAM")
+            .precision(0)
+            ;
+        incoming_requests_per_channel
+            .init(sz[int(T::Level::Channel)])
+            .name("incoming_requests_per_channel")
+            .desc("Number of incoming requests to each DRAM channel")
+            ;
     }
 
     ~Memory()
@@ -95,6 +113,8 @@ public:
 
     void tick()
     {
+        ++num_dram_cycles;
+
         for (auto ctrl : ctrls)
             ctrl->tick();
     }
@@ -127,13 +147,14 @@ public:
         // assert(addr == 0); // check address is within range
 
         // dispatch to the right channel
-        bool success = ctrls[req.addr_vec[0]]->enqueue(req);
-        if (success) {
-          totReqCount++;
-          return true;
-        } else {
-          return false;
+        if(ctrls[req.addr_vec[0]]->enqueue(req)) {
+            // tally stats here to avoid double counting for requests that aren't enqueued
+            ++num_incoming_requests;
+            ++incoming_requests_per_channel[req.addr_vec[int(T::Level::Channel)]];
+            return true;
         }
+
+        return false;
     }
 
     int pending_requests()

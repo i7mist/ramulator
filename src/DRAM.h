@@ -50,6 +50,9 @@ public:
     // Check whether a command is ready to be scheduled
     bool check(typename T::Command cmd, const int* addr, long clk);
 
+    // Check whether a command is a row hit
+    bool check_row_hit(typename T::Command cmd, const int* addr);
+
     // Return the earliest clock when a command is ready to be scheduled
     long get_next(typename T::Command cmd, const int* addr);
 
@@ -68,6 +71,11 @@ private:
     // Lookup table for which commands must be preceded by which other commands (i.e., "prerequisite")
     // E.g., a read command to a closed bank must be preceded by an activate command
     function<typename T::Command(DRAM<T>*, typename T::Command cmd, int)>* prereq;
+
+    // SAUGATA: added table for row hits
+    // Lookup table for whether a command is a row hit
+    // E.g., a read command to a closed bank must be preceded by an activate command
+    function<bool(DRAM<T>*, typename T::Command cmd, int)>* rowhit;
 
     // Lookup table between commands and the state transitions they trigger
     // E.g., an activate command to a closed bank opens both the bank and the row
@@ -90,6 +98,7 @@ DRAM<T>::DRAM(T* spec, typename T::Level level) :
 {
     state = spec->start[(int)level];
     prereq = spec->prereq[int(level)];
+    rowhit = spec->rowhit[int(level)]; // SAUGATA: added row hit table
     lambda = spec->lambda[int(level)];
     timing = spec->timing[int(level)];
 
@@ -169,6 +178,23 @@ bool DRAM<T>::check(typename T::Command cmd, const int* addr, long clk)
 
     // recursively check my child
     return children[child_id]->check(cmd, addr, clk);
+}
+
+// SAUGATA: added function to check whether a command is a row hit
+// Check row hits
+template <typename T>
+bool DRAM<T>::check_row_hit(typename T::Command cmd, const int* addr)
+{
+    int child_id = addr[int(level)+1];
+    if (rowhit[int(cmd)]) {
+        return rowhit[int(cmd)](this, cmd, child_id);  // stop recursion: there is a row hit at this level
+    }
+
+    if (child_id < 0 || !children.size())
+        return false; // stop recursion: there were no row hits at any level
+
+    // recursively check for row hits at my child
+    return children[child_id]->check_row_hit(cmd, addr);
 }
 
 template <typename T>

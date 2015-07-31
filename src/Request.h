@@ -12,6 +12,7 @@ namespace ramulator
 class Request
 {
 public:
+    bool is_first_command;
     long addr;
     // long addr_row;
     vector<int> addr_vec;
@@ -31,15 +32,18 @@ public:
     long depart;
     function<void(Request&)> callback; // call back with more info
 
-    Request(long addr, Type type) : addr(addr), type(type),
+    Request(long addr, Type type)
+        : is_first_command(true), addr(addr), type(type),
       callback([](Request& req){}) {}
+
     Request(long addr, Type type, function<void(Request&)> callback)
-        : addr(addr), type(type), callback(callback) {}
+        : is_first_command(true), addr(addr), type(type), callback(callback) {}
 
     Request(vector<int>& addr_vec, Type type, function<void(Request&)> callback)
-        : addr_vec(addr_vec), type(type), callback(callback) {}
+        : is_first_command(true), addr_vec(addr_vec), type(type), callback(callback) {}
 
-    Request(){}
+    Request()
+        : is_first_command(true) {}
 };
 
 } /*namespace ramulator*/

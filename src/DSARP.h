@@ -159,6 +159,10 @@ public:
     /* Prerequisite */
     function<Command(DRAM<DSARP>*, Command cmd, int)> prereq[int(Level::MAX)][int(Command::MAX)];
 
+    // SAUGATA: added function object container for row hit status
+    /* Row hit */
+    function<bool(DRAM<DSARP>*, Command cmd, int)> rowhit[int(Level::MAX)][int(Command::MAX)];
+
     /* Timing */
     struct TimingEntry
     {
@@ -253,6 +257,7 @@ private:
     void init_speed();
     void init_lambda();
     void init_prereq();
+    void init_rowhit();  // SAUGATA: added function to check for row hits
     void init_timing();
 };
 

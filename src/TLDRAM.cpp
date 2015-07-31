@@ -56,6 +56,7 @@ TLDRAM::TLDRAM(Org org, Speed speed, int segment_ratio) :
     this->segment_ratio = segment_ratio;
     init_speed();
     init_prereq();
+    init_rowhit(); // SAUGATA: added row hit function
     init_lambda();
     init_timing();
 }
@@ -213,6 +214,24 @@ void TLDRAM::init_prereq()
             default: assert(false);
         }
     };
+}
+
+// SAUGATA: added row hit check functions to see if the desired location is currently open
+void TLDRAM::init_rowhit()
+{
+    // RD
+    rowhit[int(Level::Bank)][int(Command::RD)] = [] (DRAM<TLDRAM>* node, Command cmd, int id) {
+        switch (int(node->state)) {
+            case int(State::Closed): return false;
+            case int(State::Opened):
+                if (node->row_state.find(id) != node->row_state.end())
+                    return true;
+                return false;
+            default: assert(false);
+        }};
+
+    // WR
+    rowhit[int(Level::Bank)][int(Command::WR)] = rowhit[int(Level::Bank)][int(Command::RD)];
 }
 
 

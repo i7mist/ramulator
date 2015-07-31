@@ -24,8 +24,8 @@ template <typename T>
 class Controller
 {
 protected:
-   ScalarStat reqCount;
-   ScalarStat latencySum;
+    ScalarStat row_hit;
+    ScalarStat row_miss;
 public:
     /* Member Variables */
     long clk = 0;
@@ -74,12 +74,17 @@ public:
         }
 
         // regStats
-        reqCount.name("reqCount")
-                .desc("request count for chan-" + to_string(channel->id))
-                .precision(0);
-        latencySum.name("latencySum")
-                  .desc("end-to-end memory request latency sum for chan-" + to_string(channel->id));
 
+        row_hit
+            .name("row_hit_channel_"+to_string(channel->id))
+            .desc("Number of row hits")
+            .precision(0)
+            ;
+        row_miss
+            .name("row_miss_channel_"+to_string(channel->id))
+            .desc("Number of row misses")
+            .precision(0)
+            ;
     }
 
     ~Controller(){
@@ -119,7 +124,6 @@ public:
             pending.push_back(req);
             readq.q.pop_back();
         }
-        reqCount++;
         return true;
     }
 
@@ -132,7 +136,7 @@ public:
             Request& req = pending[0];
             if (req.depart <= clk) {
                 // FIXME update req.depart with clk
-                latencySum += req.depart - req.arrive;
+                req.depart = clk;
                 req.callback(req);
                 pending.pop_front();
             }
@@ -169,6 +173,16 @@ public:
             return;  // nothing more to be done this cycle
         }
 
+        if (req->is_first_command) {
+            req->is_first_command = false;
+            if (req->type == Request::Type::READ || req->type == Request::Type::WRITE) {
+                if (is_row_hit(req))
+                    ++row_hit;
+                else
+                    ++row_miss;
+            }
+        }
+
         // issue command on behalf of request
         auto cmd = get_first_cmd(req);
         issue_cmd(cmd, get_addr_vec(cmd, req));
@@ -196,6 +210,17 @@ public:
     bool is_ready(typename T::Command cmd, const vector<int>& addr_vec)
     {
         return channel->check(cmd, addr_vec.data(), clk);
+    }
+
+    bool is_row_hit(list<Request>::iterator req)
+    {
+        typename T::Command cmd = get_first_cmd(req);
+        return channel->check_row_hit(cmd, req->addr_vec.data());
+    }
+
+    bool is_row_hit(typename T::Command cmd, const vector<int>& addr_vec)
+    {
+        return channel->check_row_hit(cmd, addr_vec.data());
     }
 
     void update_temp(ALDRAM::Temp current_temperature)

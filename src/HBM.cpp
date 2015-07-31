@@ -27,6 +27,7 @@ HBM::HBM(Org org, Speed speed)
 {
     init_speed();
     init_prereq();
+    init_rowhit(); // SAUGATA: added row hit function
     init_lambda();
     init_timing();
 }
@@ -124,6 +125,24 @@ void HBM::init_prereq()
             case int(State::SelfRefresh): return Command::SRE;
             default: assert(false);
         }};
+}
+
+// SAUGATA: added row hit check functions to see if the desired location is currently open
+void HBM::init_rowhit()
+{
+    // RD
+    rowhit[int(Level::Bank)][int(Command::RD)] = [] (DRAM<HBM>* node, Command cmd, int id) {
+        switch (int(node->state)) {
+            case int(State::Closed): return false;
+            case int(State::Opened):
+                if (node->row_state.find(id) != node->row_state.end())
+                    return true;
+                return false;
+            default: assert(false);
+        }};
+
+    // WR
+    rowhit[int(Level::Bank)][int(Command::WR)] = rowhit[int(Level::Bank)][int(Command::RD)];
 }
 
 

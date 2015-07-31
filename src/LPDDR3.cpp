@@ -32,6 +32,7 @@ LPDDR3::LPDDR3(Org org, Speed speed)
 {
     init_speed();
     init_prereq();
+    init_rowhit(); // SAUGATA: added row hit function
     init_lambda();
     init_timing();
 }
@@ -143,6 +144,23 @@ void LPDDR3::init_prereq()
         }};
 }
 
+// SAUGATA: added row hit check functions to see if the desired location is currently open
+void LPDDR3::init_rowhit()
+{
+    // RD
+    rowhit[int(Level::Bank)][int(Command::RD)] = [] (DRAM<LPDDR3>* node, Command cmd, int id) {
+        switch (int(node->state)) {
+            case int(State::Closed): return false;
+            case int(State::Opened):
+                if (node->row_state.find(id) != node->row_state.end())
+                    return true;
+                return false;
+            default: assert(false);
+        }};
+
+    // WR
+    rowhit[int(Level::Bank)][int(Command::WR)] = rowhit[int(Level::Bank)][int(Command::RD)];
+}
 
 void LPDDR3::init_lambda()
 {

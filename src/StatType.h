@@ -7,6 +7,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstdlib>
 
 namespace ramulator {
 
@@ -136,11 +137,11 @@ class Stat : public StatBase {
 
   virtual void print() {};
   virtual void printname() {
-    printf("%s\t", _name.c_str());
+    printf("%s\t\t", _name.c_str());
   }
 
   virtual void printdesc() {
-    printf("\t# %s\n", _desc.c_str());
+    printf("\t\t# %s\n", _desc.c_str());
   }
 
   virtual bool is_display() const {
@@ -292,7 +293,8 @@ class VectorBase: public Stat<Derived> {
     _size = __size;
     data.resize(size());
     for (off_type i = 0 ; i < size() ; ++i) {
-      data[i].flags(0);
+      data[i].flags(0)
+             .name("[" + std::string(1, char(i + '0')) + "]");
     }
   }
   size_type size() const {return _size;}
@@ -361,6 +363,9 @@ class VectorBase: public Stat<Derived> {
     Stat<Derived>::printname();
     printf("%10.*lf", Stat<Derived>::_precision, total());
     Stat<Derived>::printdesc();
+    for (off_type i = 0 ; i < size() ; ++i) {
+      data[i].print();
+    }
   }
 };
 

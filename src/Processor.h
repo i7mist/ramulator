@@ -2,6 +2,7 @@
 #define __PROCESSOR_H
 
 #include "Cache.h"
+#include "Config.h"
 #include "Request.h"
 #include <iostream>
 #include <vector>
@@ -57,7 +58,8 @@ public:
     int id = 0;
     function<bool(Request)> send;
 
-    Core(int coreid, const char* trace_fname,
+    Core(const Config& configs, int coreid,
+        const char* trace_fname,
         function<bool(Request)> send_next, Cache* llc);
     void tick();
     void receive(Request& req);
@@ -92,8 +94,8 @@ private:
 
 class Processor {
 public:
-    Processor(vector<const char*> trace_list,
-        function<bool(Request)> send, bool early_exit);
+    Processor(const Config& configs, vector<const char*> trace_list,
+        function<bool(Request)> send);
     void tick();
     void receive(Request& req);
     bool finished();
@@ -106,7 +108,7 @@ public:
     // the earliest trace finishes.
     bool early_exit;
 
-    bool no_shared_cache = true;
+    bool no_shared_cache;
 
     int l3_size = 1 << 23;
     int l3_assoc = 1 << 3;

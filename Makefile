@@ -9,12 +9,12 @@ OBJS := $(patsubst $(SRCDIR)/%.cpp, $(OBJDIR)/%.o, $(SRCS))
 #   g++ 4.x due to an internal compiler error when processing lambda functions.
 # CXX := clang++
  CXX := g++-5
-CXXFLAGS := -O3 -std=c++11 -g -Wall
+CXXFLAGS := -std=c++11 -g -Wall
 
 
 .PHONY: all clean depend
 
-all: depend ramulator-dramtrace ramulator-cputrace
+all: depend ramulator
 
 clean:
 	rm -f ramulator-dramtrace ramulator-cputrace $(SRCDIR)/*.o
@@ -33,11 +33,8 @@ ifneq ($(MAKECMDGOALS),clean)
 endif
 
 
-ramulator-dramtrace: $(MAIN) $(OBJS) $(SRCDIR)/*.h | depend
-	$(CXX) $(CXXFLAGS) -DRAMULATOR -DRAMULATOR_DRAMTRACE -o $@ $(MAIN) $(OBJS)
-
-ramulator-cputrace: $(MAIN) $(OBJS) $(SRCDIR)/*.h | depend
-	$(CXX) $(CXXFLAGS) -DRAMULATOR -DRAMULATOR_CPUTRACE -DEARLY_EXIT -o $@ $(MAIN) $(OBJS)
+ramulator: $(MAIN) $(OBJS) $(SRCDIR)/*.h | depend
+	$(CXX) $(CXXFLAGS) -DRAMULATOR -o $@ $(MAIN) $(OBJS)
 
 $(OBJS): | $(OBJDIR)
 

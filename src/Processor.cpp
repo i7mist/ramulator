@@ -4,14 +4,16 @@
 using namespace std;
 using namespace ramulator;
 
-Processor::Processor(vector<const char*> trace_list,
-    function<bool(Request)> send_memory,
-    bool early_exit)
-    :ipcs(trace_list.size(), -1), early_exit(early_exit),
-     cachesys(new CacheSystem(send_memory)),
-     llc(l3_size, l3_assoc, l3_blocksz,
+Processor::Processor(const Config& configs,
+    vector<const char*> trace_list,
+    function<bool(Request)> send_memory)
+    : ipcs(trace_list.size(), -1),
+    cachesys(new CacheSystem(send_memory)),
+    llc(l3_size, l3_assoc, l3_blocksz,
          mshr_per_bank * trace_list.size(),
          Cache::Level::L3, cachesys) {
+  early_exit = configs.is_early_exit();
+  no_shared_cache = !configs.has_l3_cache();
   assert(cachesys != nullptr);
   int tracenum = trace_list.size();
   assert(tracenum > 0);
@@ -22,11 +24,11 @@ Processor::Processor(vector<const char*> trace_list,
   if (no_shared_cache) {
     for (int i = 0 ; i < tracenum ; ++i) {
       cores.emplace_back(
-          i, trace_list[i], send_memory, nullptr);
+          configs, i, trace_list[i], send_memory, nullptr);
     }
   } else {
     for (int i = 0 ; i < tracenum ; ++i) {
-      cores.emplace_back(i, trace_list[i],
+      cores.emplace_back(configs, i, trace_list[i],
           std::bind(&Cache::send, &llc, std::placeholders::_1),
           &llc);
     }
@@ -80,9 +82,11 @@ bool Processor::finished() {
   }
 }
 
-Core::Core(int coreid, const char* trace_fname,
+Core::Core(const Config& configs,
+    int coreid, const char* trace_fname,
     function<bool(Request)> send_next, Cache* llc)
-    : id(coreid), llc(llc), trace(trace_fname)
+    : id(coreid), no_core_caches(!configs.has_core_caches()),
+    llc(llc), trace(trace_fname)
 {
   // Build cache hierarchy
   if (no_core_caches) {

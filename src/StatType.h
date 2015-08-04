@@ -2,6 +2,7 @@
 #define __STATTYPE_H
 
 #include <limits>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -57,7 +58,7 @@ class StatBase {
  public:
   // TODO implement print for Distribution, Histogram,
   // AverageDeviation, StandardDeviation
-  virtual void print() = 0;
+  virtual void print(std::ofstream& file) = 0;
 
   virtual size_type size() const = 0;
   virtual bool zero() const = 0;
@@ -73,17 +74,27 @@ class StatBase {
 class StatList {
  protected:
   std::vector<StatBase*> list;
+  std::ofstream stat_output;
  public:
   void add(StatBase* stat) {
     list.push_back(stat);
+  }
+  void output(std::string filename) {
+    stat_output.open(filename.c_str(), std::ios_base::out);
+    if (!stat_output.good()) {
+      assert(false && "!stat_output.good()");
+    }
   }
   void printall() {
     for(off_type i = 0 ; i < list.size() ; ++i) {
       if (list[i]->is_display()) {
         list[i]->prepare();
-        list[i]->print();
+        list[i]->print(stat_output);
       }
     }
+  }
+  ~StatList() {
+    stat_output.close();
   }
 };
 
@@ -135,13 +146,15 @@ class Stat : public StatBase {
 
   size_type size() const { return 0; }
 
-  virtual void print() {};
-  virtual void printname() {
-    printf("%s\t\t", _name.c_str());
+  virtual void print(std::ofstream& file) {};
+  virtual void printname(std::ofstream& file) {
+    file.width(40);
+    file << _name;
   }
 
-  virtual void printdesc() {
-    printf("\t\t# %s\n", _desc.c_str());
+  virtual void printdesc(std::ofstream& file) {
+    file.width(40);
+    file << "# " << _desc << std::endl;
   }
 
   virtual bool is_display() const {
@@ -159,11 +172,14 @@ class ScalarBase: public Stat<ScalarType> {
   size_type size() const {return 1;}
   VResult vresult() const {return VResult(1, result());}
 
-  virtual void print() {
-    Stat<ScalarType>::printname();
+  virtual void print(std::ofstream& file) {
+    Stat<ScalarType>::printname(file);
     // TODO deal with flag
-    printf("%10.*lf",Stat<ScalarType>::_precision, Stat<ScalarType>::self().result());
-    Stat<ScalarType>::printdesc();
+    file.precision(Stat<ScalarType>::_precision);
+    file.width(10);
+    Result res = Stat<ScalarType>::self().result();
+    file << std::fixed << res;
+    Stat<ScalarType>::printdesc(file);
   }
 };
 
@@ -359,12 +375,14 @@ class VectorBase: public Stat<Derived> {
       data[i].reset();
     }
   }
-  void print() {
-    Stat<Derived>::printname();
-    printf("%10.*lf", Stat<Derived>::_precision, total());
-    Stat<Derived>::printdesc();
+  void print(std::ofstream& file) {
+    Stat<Derived>::printname(file);
+    file.precision(Stat<Derived>::_precision);
+    file.width(20);
+    file << std::fixed << total();
+    Stat<Derived>::printdesc(file);
     for (off_type i = 0 ; i < size() ; ++i) {
-      data[i].print();
+      data[i].print(file);
     }
   }
 };

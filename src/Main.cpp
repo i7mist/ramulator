@@ -7,6 +7,7 @@
 #include "Statistics.h"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <stdlib.h>
 #include <functional>
 #include <map>
@@ -128,22 +129,25 @@ void start_run(const Config& configs, T* spec, const vector<const char*>& files)
 int main(int argc, const char *argv[])
 {
     if (argc < 2) {
-        printf("Usage: %s <configs-file> <cpu-trace-core1> <cpu-trace-core2>...\n"
+        printf("Usage: %s <configs-file> [--stats <filename>] <cpu-trace-core1> <cpu-trace-core2>\n"
             "Example: %s ramulator-configs.cfg cpu.trace\n", argv[0], argv[0]);
         return 0;
     }
 
     Config configs(argv[1]);
-    std::vector<const char*> files(&argv[2], &argv[argc]);
 
     const std::string& standard = configs["standard"];
     assert(standard != "" || "DRAM standard should be specified.");
 
-    if (configs.get_stats_file() != "") {
-      Stats::statlist.output(configs.get_stats_file());
+    int start_trace;
+    if (strcmp(argv[2], "--stats") == 0) {
+      Stats::statlist.output(argv[3]);
+      start_trace = 4;
     } else {
       Stats::statlist.output(standard+"stats.txt");
+      start_trace = 2;
     }
+    std::vector<const char*> files(&argv[start_trace], &argv[argc]);
 
     if (standard == "DDR3") {
       DDR3* ddr3 = new DDR3(configs["org"], configs["speed"]);

@@ -20,7 +20,6 @@ private:
     int subarrays;
     int cpu_tick;
     int mem_tick;
-    std::string stats_file;
 
 public:
     Config() {}
@@ -39,7 +38,6 @@ public:
     int get_ranks() const {return ranks;}
     int get_cpu_tick() const {return cpu_tick;}
     int get_mem_tick() const {return mem_tick;}
-    const std::string& get_stats_file() const {return stats_file;}
     bool has_l3_cache() const {
       if (options.find("cache") != options.end()) {
         const std::string& cache_option = (options.find("cache"))->second;

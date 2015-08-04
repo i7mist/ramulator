@@ -190,12 +190,12 @@ class DistStatBase : public StatBase<StatType> { // wrapper for Stats::DistBase
 
 class ScalarStat : public ScalarStatBase<Stats::Scalar> {
   public:
-    using StatBase<Stats::Scalar>::operator=;
+    using ScalarStatBase<Stats::Scalar>::operator=;
 };
 
 class AverageStat : public ScalarStatBase<Stats::Average> {
   public:
-    using StatBase<Stats::Average>::operator=;
+    using ScalarStatBase<Stats::Average>::operator=;
 };
 
 class VectorStat : public VectorStatBase<Stats::Vector, Stats::Scalar> {

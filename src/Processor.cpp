@@ -37,9 +37,17 @@ Processor::Processor(const Config& configs,
     cores[i].callback = std::bind(&Processor::receive, this,
         placeholders::_1);
   }
+
+  // regStats
+  cpu_cycles.name("cpu_cycles")
+            .desc("cpu cycle number")
+            .precision(0)
+            ;
+  cpu_cycles = 0;
 }
 
 void Processor::tick() {
+  cpu_cycles++;
   if (!no_shared_cache) {
     cachesys->tick();
   }
@@ -111,6 +119,13 @@ Core::Core(const Config& configs,
     more_reqs = trace.get_unfiltered_request(
         bubble_cnt, req_addr, req_type);
   }
+
+  // regStats
+  memory_access_cycles.name("memory_access_cycles")
+                      .desc("memory access cycles in memory time domain")
+                      .precision(0)
+                      ;
+  memory_access_cycles = 0;
 }
 
 
@@ -171,6 +186,10 @@ bool Core::finished()
 void Core::receive(Request& req)
 {
     window.set_ready(req.addr, ~(l1_blocksz - 1l));
+    if (req.arrive != -1 && req.depart > last) {
+      memory_access_cycles += (req.depart - max(last, req.arrive));
+      last = req.depart;
+    }
 }
 
 bool Window::is_full()

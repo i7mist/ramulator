@@ -28,7 +28,7 @@ public:
         MAX
     } type;
 
-    long arrive;
+    long arrive = -1;
     long depart;
     function<void(Request&)> callback; // call back with more info
 

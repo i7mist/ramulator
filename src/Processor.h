@@ -4,6 +4,7 @@
 #include "Cache.h"
 #include "Config.h"
 #include "Request.h"
+#include "Statistics.h"
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -90,6 +91,9 @@ private:
     long req_addr;
     Request::Type req_type;
     bool more_reqs;
+
+    ScalarStat memory_access_cycles;
+    long last = 0;
 };
 
 class Processor {
@@ -117,6 +121,8 @@ public:
 
     std::shared_ptr<CacheSystem> cachesys;
     Cache llc;
+
+    ScalarStat cpu_cycles;
 };
 
 }

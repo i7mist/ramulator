@@ -176,7 +176,7 @@ class ScalarBase: public Stat<ScalarType> {
     Stat<ScalarType>::printname(file);
     // TODO deal with flag
     file.precision(Stat<ScalarType>::_precision);
-    file.width(10);
+    file.width(20);
     Result res = Stat<ScalarType>::self().result();
     file << std::fixed << res;
     Stat<ScalarType>::printdesc(file);

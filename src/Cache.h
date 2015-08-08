@@ -2,6 +2,7 @@
 #define __CACHE_H
 
 #include "Request.h"
+#include "Statistics.h"
 #include <algorithm>
 #include <cstdio>
 #include <cassert>
@@ -36,6 +37,13 @@ public:
 };
 
 class Cache {
+protected:
+  ScalarStat CacheReadMiss;
+  ScalarStat CacheWriteMiss;
+  ScalarStat CacheTotalMiss;
+  ScalarStat CacheReadAccess;
+  ScalarStat CacheWriteAccess;
+  ScalarStat CacheTotalAccess;
 public:
   enum class Level {
     L1,
@@ -43,6 +51,7 @@ public:
     L3,
     MAX
   } level;
+  std::string level_string;
 
   struct Line {
     long addr;

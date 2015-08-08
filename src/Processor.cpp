@@ -101,16 +101,16 @@ Core::Core(const Config& configs,
     send = send_next;
   } else {
     // L2 caches[0]
-    caches.push_back(Cache(
+    caches.emplace_back(new Cache(
         l2_size, l2_assoc, l2_blocksz, l2_mshr_num,
         Cache::Level::L2, llc->cachesys));
     // L1 caches[1]
-    caches.push_back(Cache(
+    caches.emplace_back(new Cache(
         l1_size, l1_assoc, l1_blocksz, l1_mshr_num,
         Cache::Level::L1, llc->cachesys));
-    send = bind(&Cache::send, &caches[1], placeholders::_1);
-    caches[0].concatlower(llc);
-    caches[1].concatlower(&caches[0]);
+    send = bind(&Cache::send, caches[1].get(), placeholders::_1);
+    caches[0]->concatlower(llc);
+    caches[1]->concatlower(caches[0].get());
   }
   if (no_core_caches) {
     more_reqs = trace.get_filtered_request(

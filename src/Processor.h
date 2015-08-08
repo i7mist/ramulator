@@ -80,7 +80,7 @@ public:
     int l2_assoc = 1 << 3;
     int l2_blocksz = 1 << 6;
     int l2_mshr_num = 16;
-    vector<Cache> caches;
+    std::vector<std::shared_ptr<Cache>> caches;
     Cache* llc;
 
 private:

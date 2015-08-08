@@ -87,6 +87,9 @@ class StatList {
   }
   void printall() {
     for(off_type i = 0 ; i < list.size() ; ++i) {
+      if (!list[i]) {
+        continue;
+      }
       if (list[i]->is_display()) {
         list[i]->prepare();
         list[i]->print(stat_output);

@@ -23,6 +23,14 @@ Cache::Cache(int size, int assoc, int block_size,
   debug("level %d size %d assoc %d block_size %d\n",
       int(level), size, assoc, block_size);
 
+  if (level == Level::L1) {
+    level_string = "L1";
+  } else if (level == Level::L2) {
+    level_string = "L2";
+  } else if (level == Level::L3) {
+    level_string = "L3";
+  }
+
   // Check size, block size and assoc are 2^N
   assert((size & (size - 1)) == 0);
   assert((block_size & (block_size - 1)) == 0);
@@ -38,6 +46,32 @@ Cache::Cache(int size, int assoc, int block_size,
   debug("index_offset %d", index_offset);
   debug("index_mask 0x%x", index_mask);
   debug("tag_offset %d", tag_offset);
+
+  // regStats
+  CacheReadMiss.name(level_string + string("_CacheReadMiss"))
+               .desc("cache read miss count")
+               .precision(0);
+
+  CacheWriteMiss.name(level_string + string("_CacheWriteMiss"))
+                .desc("cache write miss count")
+                .precision(0);
+
+  CacheTotalMiss.name(level_string + string("_CacheTotalMiss"))
+                .desc("cache total miss count")
+                .precision(0);
+
+  CacheReadAccess.name(level_string + string("_CacheReadAccess"))
+                .desc("cache read access count")
+                .precision(0);
+
+  CacheWriteAccess.name(level_string + string("_CacheWriteAccess"))
+                  .desc("cache write access count")
+                  .precision(0);
+
+  CacheTotalAccess.name(level_string + string("_CacheTotalAccess"))
+                  .desc("cache total access count")
+                  .precision(0);
+
 }
 
 bool Cache::send(Request req) {
@@ -45,6 +79,13 @@ bool Cache::send(Request req) {
       int(level), req.addr, int(req.type), get_index(req.addr),
       get_tag(req.addr));
 
+  CacheTotalAccess++;
+  if (req.type == Request::Type::WRITE) {
+    CacheWriteAccess++;
+  } else {
+    assert(req.type == Request::Type::READ);
+    CacheReadAccess++;
+  }
   // If there isn't a set, create it.
   auto& lines = get_lines(req.addr);
   std::list<Line>::iterator line;
@@ -64,6 +105,13 @@ bool Cache::send(Request req) {
 
   } else {
     debug("miss @level %d", int(level));
+    CacheTotalMiss++;
+    if (req.type == Request::Type::WRITE) {
+      CacheWriteMiss++;
+    } else {
+      assert(req.type == Request::Type::READ);
+      CacheReadMiss++;
+    }
 
     // The dirty bit will be set if this is a write request and @L1
     bool dirty = (req.type == Request::Type::WRITE);

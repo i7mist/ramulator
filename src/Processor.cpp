@@ -126,6 +126,11 @@ Core::Core(const Config& configs,
                       .precision(0)
                       ;
   memory_access_cycles = 0;
+  cpu_inst.name("cpu_instructions")
+          .desc("cpu instruction number")
+          .precision(0)
+          ;
+  cpu_inst = 0;
 }
 
 
@@ -151,6 +156,7 @@ void Core::tick()
         window.insert(true, -1);
         inserted++;
         bubble_cnt--;
+        cpu_inst++;
     }
 
     if (req_type == Request::Type::READ) {
@@ -162,12 +168,14 @@ void Core::tick()
         if (!send(req)) return;
 
         window.insert(false, req_addr);
+        cpu_inst++;
     }
     else {
         // write request
         assert(req_type == Request::Type::WRITE);
         Request req(req_addr, req_type, callback);
         if (!send(req)) return;
+        cpu_inst++;
     }
 
     if (no_core_caches) {

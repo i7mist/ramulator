@@ -93,6 +93,7 @@ private:
     bool more_reqs;
 
     ScalarStat memory_access_cycles;
+    ScalarStat cpu_inst;
     long last = 0;
 };
 

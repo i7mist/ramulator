@@ -30,9 +30,12 @@ template <class T, template<typename> class Controller = Controller >
 class Memory : public MemoryBase
 {
 protected:
+  ScalarStat dram_capacity;
   ScalarStat num_dram_cycles;
   ScalarStat num_incoming_requests;
   VectorStat incoming_requests_per_channel;
+
+  long max_address;
 public:
     enum class Type {
         ChRaBaRoCo,
@@ -64,11 +67,21 @@ public:
         if (type != Type::RoBaRaCoCh && spec->standard_name.substr(0, 5) == "LPDDR")
             assert((sz[int(T::Level::Row)] & (sz[int(T::Level::Row)] - 1)) == 0);
 
+        max_address = spec->channel_width / 8;
+
         for (unsigned int lev = 0; lev < addr_bits.size(); lev++) {
           addr_bits[lev] = calc_log2(sz[lev]);
+            max_address *= sz[lev];
         }
 
         addr_bits[int(T::Level::MAX) - 1] -= calc_log2(spec->prefetch_size);
+
+        dram_capacity
+            .name("dram_capacity")
+            .desc("Number of bytes in simulated DRAM")
+            .precision(0)
+            ;
+        dram_capacity = max_address;
 
         num_dram_cycles
             .name("dram_cycles")

@@ -48,30 +48,39 @@ Cache::Cache(int size, int assoc, int block_size,
   debug("tag_offset %d", tag_offset);
 
   // regStats
-  CacheReadMiss.name(level_string + string("_CacheReadMiss"))
-               .desc("cache read miss count")
-               .precision(0);
+  cache_read_miss.name(level_string + string("_cache_read_miss"))
+                 .desc("cache read miss count")
+                 .precision(0);
 
-  CacheWriteMiss.name(level_string + string("_CacheWriteMiss"))
-                .desc("cache write miss count")
-                .precision(0);
-
-  CacheTotalMiss.name(level_string + string("_CacheTotalMiss"))
-                .desc("cache total miss count")
-                .precision(0);
-
-  CacheReadAccess.name(level_string + string("_CacheReadAccess"))
-                .desc("cache read access count")
-                .precision(0);
-
-  CacheWriteAccess.name(level_string + string("_CacheWriteAccess"))
-                  .desc("cache write access count")
+  cache_write_miss.name(level_string + string("_cache_write_miss"))
+                  .desc("cache write miss count")
                   .precision(0);
 
-  CacheTotalAccess.name(level_string + string("_CacheTotalAccess"))
-                  .desc("cache total access count")
+  cache_total_miss.name(level_string + string("_cache_total_miss"))
+                  .desc("cache total miss count")
                   .precision(0);
 
+  cache_read_access.name(level_string + string("_cache_read_access"))
+                  .desc("cache read access count")
+                  .precision(0);
+
+  cache_write_access.name(level_string + string("_cache_write_access"))
+                    .desc("cache write access count")
+                    .precision(0);
+
+  cache_total_access.name(level_string + string("_cache_total_access"))
+                    .desc("cache total access count")
+                    .precision(0);
+
+  cache_mshr_hit.name(level_string + string("_cache_mshr_hit"))
+                .desc("cache mshr hit count")
+                .precision(0);
+  cache_mshr_unavailable.name(level_string + string("_cache_mshr_unavailable"))
+                         .desc("cache mshr not available count")
+                         .precision(0);
+  cache_set_unavailable.name(level_string + string("_cache_set_unavailable"))
+                         .desc("cache set not available")
+                         .precision(0);
 }
 
 bool Cache::send(Request req) {
@@ -79,12 +88,12 @@ bool Cache::send(Request req) {
       int(level), req.addr, int(req.type), get_index(req.addr),
       get_tag(req.addr));
 
-  CacheTotalAccess++;
+  cache_total_access++;
   if (req.type == Request::Type::WRITE) {
-    CacheWriteAccess++;
+    cache_write_access++;
   } else {
     assert(req.type == Request::Type::READ);
-    CacheReadAccess++;
+    cache_read_access++;
   }
   // If there isn't a set, create it.
   auto& lines = get_lines(req.addr);
@@ -105,12 +114,12 @@ bool Cache::send(Request req) {
 
   } else {
     debug("miss @level %d", int(level));
-    CacheTotalMiss++;
+    cache_total_miss++;
     if (req.type == Request::Type::WRITE) {
-      CacheWriteMiss++;
+      cache_write_miss++;
     } else {
       assert(req.type == Request::Type::READ);
-      CacheReadMiss++;
+      cache_read_miss++;
     }
 
     // The dirty bit will be set if this is a write request and @L1
@@ -126,6 +135,7 @@ bool Cache::send(Request req) {
     auto mshr = hit_mshr(req.addr);
     if (mshr != mshr_entries.end()) {
       debug("hit mshr");
+      cache_mshr_hit++;
       mshr->second->dirty = dirty || mshr->second->dirty;
       return true;
     }
@@ -135,12 +145,14 @@ bool Cache::send(Request req) {
     if (mshr_entries.size() == mshr_entry_num) {
       // When no MSHR entries available, the miss request
       // is stalling.
+      cache_mshr_unavailable++;
       debug("no mshr entry available");
       return false;
     }
 
     // Check whether there is a line available
     if (all_sets_locked(lines)) {
+      cache_set_unavailable++;
       return false;
     }
 

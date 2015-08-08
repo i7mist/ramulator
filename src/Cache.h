@@ -38,12 +38,15 @@ public:
 
 class Cache {
 protected:
-  ScalarStat CacheReadMiss;
-  ScalarStat CacheWriteMiss;
-  ScalarStat CacheTotalMiss;
-  ScalarStat CacheReadAccess;
-  ScalarStat CacheWriteAccess;
-  ScalarStat CacheTotalAccess;
+  ScalarStat cache_read_miss;
+  ScalarStat cache_write_miss;
+  ScalarStat cache_total_miss;
+  ScalarStat cache_read_access;
+  ScalarStat cache_write_access;
+  ScalarStat cache_total_access;
+  ScalarStat cache_mshr_hit;
+  ScalarStat cache_mshr_unavailable;
+  ScalarStat cache_set_unavailable;
 public:
   enum class Level {
     L1,

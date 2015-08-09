@@ -61,16 +61,16 @@ public:
 
     Core(const Config& configs, int coreid,
         const char* trace_fname,
-        function<bool(Request)> send_next, Cache* llc);
+        function<bool(Request)> send_next, Cache* llc,
+        std::shared_ptr<CacheSystem> cachesys);
     void tick();
     void receive(Request& req);
     double calc_ipc();
     bool finished();
     function<void(Request&)> callback;
 
-    // When no_core_caches is false, no_shared_caches should also
-    // be false.
     bool no_core_caches = true;
+    bool no_shared_cache = true;
     int l1_size = 1 << 15;
     int l1_assoc = 1 << 3;
     int l1_blocksz = 1 << 6;
@@ -113,7 +113,8 @@ public:
     // the earliest trace finishes.
     bool early_exit;
 
-    bool no_shared_cache;
+    bool no_core_caches = true;
+    bool no_shared_cache = true;
 
     int l3_size = 1 << 23;
     int l3_assoc = 1 << 3;

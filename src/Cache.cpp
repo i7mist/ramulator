@@ -31,6 +31,9 @@ Cache::Cache(int size, int assoc, int block_size,
     level_string = "L3";
   }
 
+  is_first_level = (level == cachesys->first_level);
+  is_last_level = (level == cachesys->last_level);
+
   // Check size, block size and assoc are 2^N
   assert((size & (size - 1)) == 0);
   assert((block_size & (block_size - 1)) == 0);
@@ -59,6 +62,10 @@ Cache::Cache(int size, int assoc, int block_size,
   cache_total_miss.name(level_string + string("_cache_total_miss"))
                   .desc("cache total miss count")
                   .precision(0);
+
+  cache_eviction.name(level_string + string("_cache_eviction"))
+                .desc("number of evict from this level to lower level")
+                .precision(0);
 
   cache_read_access.name(level_string + string("_cache_read_access"))
                   .desc("cache read access count")
@@ -163,7 +170,7 @@ bool Cache::send(Request req) {
     mshr_entries.push_back(make_pair(req.addr, newline));
 
     // Send the request to next level;
-    if (level != Level::L3) {
+    if (!is_last_level) {
       lower_cache->send(req);
     } else {
       cachesys->wait_list.push_back(
@@ -232,6 +239,7 @@ std::pair<long, bool> Cache::invalidate(long addr) {
 void Cache::evict(std::list<Line>* lines,
     std::list<Line>::iterator victim) {
   debug("level %d miss evict victim %lx", int(level), victim->addr);
+  cache_eviction++;
 
   long addr = victim->addr;
   long invalidate_time = 0;
@@ -250,12 +258,12 @@ void Cache::evict(std::list<Line>* lines,
   debug("invalidate delay: %ld, dirty: %s", invalidate_time,
       dirty ? "true" : "false");
 
-  if (level != Level::L3) {
-    // L1 or L2 eviction
+  if (!is_last_level) {
+    // not LLC eviction
     assert(lower_cache != nullptr);
     lower_cache->evictline(addr, dirty);
   } else {
-    // L3 eviction
+    // LLC eviction
     if (dirty) {
       Request write_req(addr, Request::Type::WRITE);
       cachesys->wait_list.push_back(make_pair(

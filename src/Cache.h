@@ -1,6 +1,7 @@
 #ifndef __CACHE_H
 #define __CACHE_H
 
+#include "Config.h"
 #include "Request.h"
 #include "Statistics.h"
 #include <algorithm>
@@ -15,32 +16,14 @@
 
 namespace ramulator
 {
-class CacheSystem {
-public:
-  CacheSystem(std::function<bool(Request)> send_memory):
-    send_memory(send_memory) {}
-
-  // wait_list contains miss requests with their latencies in
-  // cache. When this latency is met, the send_memory function
-  // will be called to send the request to the memory system.
-  std::list<std::pair<long, Request> > wait_list;
-
-  // hit_list contains hit requests with their latencies in cache.
-  // callback function will be called when this latency is met and
-  // set the instruction status to ready in processor's window.
-  std::list<std::pair<long, Request> > hit_list;
-
-  std::function<bool(Request)> send_memory;
-
-  long clk = 0;
-  void tick();
-};
+class CacheSystem;
 
 class Cache {
 protected:
   ScalarStat cache_read_miss;
   ScalarStat cache_write_miss;
   ScalarStat cache_total_miss;
+  ScalarStat cache_eviction;
   ScalarStat cache_read_access;
   ScalarStat cache_write_access;
   ScalarStat cache_total_access;
@@ -87,6 +70,8 @@ public:
 
 protected:
 
+  bool is_first_level;
+  bool is_last_level;
   size_t size;
   unsigned int assoc;
   unsigned int block_num;
@@ -182,6 +167,46 @@ protected:
     return cache_lines[get_index(addr)];
   }
 
+};
+
+class CacheSystem {
+public:
+  CacheSystem(const Config& configs, std::function<bool(Request)> send_memory):
+    send_memory(send_memory) {
+      if (configs.has_core_caches()) {
+        first_level = Cache::Level::L1;
+      } else if (configs.has_l3_cache()) {
+        first_level = Cache::Level::L3;
+      } else {
+        last_level = Cache::Level::MAX; // no cache
+      }
+
+      if (configs.has_l3_cache()) {
+        last_level = Cache::Level::L3;
+      } else if (configs.has_core_caches()) {
+        last_level = Cache::Level::L2;
+      } else {
+        last_level = Cache::Level::MAX; // no cache
+      }
+    }
+
+  // wait_list contains miss requests with their latencies in
+  // cache. When this latency is met, the send_memory function
+  // will be called to send the request to the memory system.
+  std::list<std::pair<long, Request> > wait_list;
+
+  // hit_list contains hit requests with their latencies in cache.
+  // callback function will be called when this latency is met and
+  // set the instruction status to ready in processor's window.
+  std::list<std::pair<long, Request> > hit_list;
+
+  std::function<bool(Request)> send_memory;
+
+  long clk = 0;
+  void tick();
+
+  Cache::Level first_level;
+  Cache::Level last_level;
 };
 
 } // namespace ramulator

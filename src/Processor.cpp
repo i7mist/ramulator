@@ -8,12 +8,14 @@ Processor::Processor(const Config& configs,
     vector<const char*> trace_list,
     function<bool(Request)> send_memory)
     : ipcs(trace_list.size(), -1),
-    cachesys(new CacheSystem(send_memory)),
+    early_exit(configs.is_early_exit()),
+    no_core_caches(!configs.has_core_caches()),
+    no_shared_cache(!configs.has_l3_cache()),
+    cachesys(new CacheSystem(configs, send_memory)),
     llc(l3_size, l3_assoc, l3_blocksz,
          mshr_per_bank * trace_list.size(),
          Cache::Level::L3, cachesys) {
-  early_exit = configs.is_early_exit();
-  no_shared_cache = !configs.has_l3_cache();
+
   assert(cachesys != nullptr);
   int tracenum = trace_list.size();
   assert(tracenum > 0);
@@ -24,13 +26,14 @@ Processor::Processor(const Config& configs,
   if (no_shared_cache) {
     for (int i = 0 ; i < tracenum ; ++i) {
       cores.emplace_back(
-          configs, i, trace_list[i], send_memory, nullptr);
+          configs, i, trace_list[i], send_memory, nullptr,
+          cachesys);
     }
   } else {
     for (int i = 0 ; i < tracenum ; ++i) {
       cores.emplace_back(configs, i, trace_list[i],
           std::bind(&Cache::send, &llc, std::placeholders::_1),
-          &llc);
+          &llc, cachesys);
     }
   }
   for (int i = 0 ; i < tracenum ; ++i) {
@@ -48,7 +51,7 @@ Processor::Processor(const Config& configs,
 
 void Processor::tick() {
   cpu_cycles++;
-  if (!no_shared_cache) {
+  if (!(no_core_caches && no_shared_cache)) {
     cachesys->tick();
   }
   for (auto& core : cores) {
@@ -59,6 +62,12 @@ void Processor::tick() {
 void Processor::receive(Request& req) {
   if (!no_shared_cache) {
     llc.callback(req);
+  } else if (!cores[0].no_core_caches) {
+    // Assume all cores have caches or don't have caches
+    // at the same time.
+    for (auto& core : cores) {
+      core.caches[0]->callback(req);
+    }
   }
   for (auto& core : cores) {
     core.receive(req);
@@ -90,10 +99,11 @@ bool Processor::finished() {
   }
 }
 
-Core::Core(const Config& configs,
-    int coreid, const char* trace_fname,
-    function<bool(Request)> send_next, Cache* llc)
+Core::Core(const Config& configs, int coreid,
+    const char* trace_fname, function<bool(Request)> send_next,
+    Cache* llc, std::shared_ptr<CacheSystem> cachesys)
     : id(coreid), no_core_caches(!configs.has_core_caches()),
+    no_shared_cache(!configs.has_l3_cache()),
     llc(llc), trace(trace_fname)
 {
   // Build cache hierarchy
@@ -103,13 +113,15 @@ Core::Core(const Config& configs,
     // L2 caches[0]
     caches.emplace_back(new Cache(
         l2_size, l2_assoc, l2_blocksz, l2_mshr_num,
-        Cache::Level::L2, llc->cachesys));
+        Cache::Level::L2, cachesys));
     // L1 caches[1]
     caches.emplace_back(new Cache(
         l1_size, l1_assoc, l1_blocksz, l1_mshr_num,
-        Cache::Level::L1, llc->cachesys));
+        Cache::Level::L1, cachesys));
     send = bind(&Cache::send, caches[1].get(), placeholders::_1);
-    caches[0]->concatlower(llc);
+    if (llc != nullptr) {
+      caches[0]->concatlower(llc);
+    }
     caches[1]->concatlower(caches[0].get());
   }
   if (no_core_caches) {

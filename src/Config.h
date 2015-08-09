@@ -49,8 +49,7 @@ public:
     bool has_core_caches() const {
       if (options.find("cache") != options.end()) {
         const std::string& cache_option = (options.find("cache"))->second;
-        // TODO also includes L1&L2 caches only mode.
-        return (cache_option == "all");
+        return (cache_option == "all" || cache_option == "L1L2");
       } else {
         return false;
       }

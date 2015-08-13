@@ -5,6 +5,7 @@
 #include <string>
 #include <cassert>
 
+#include "Config.h"
 #include "Memory.h"
 
 using namespace std;
@@ -45,19 +46,19 @@ public:
         return new Memory<T>(ctrls);
     }
 
-    static void validate(int channels, int ranks, map<string, string>& options) {
+    static void validate(int channels, int ranks, const Config& configs) {
         assert(channels > 0 && ranks > 0);
     }
 
-    static MemoryBase *create(map<string, string>& options, int cacheline)
+    static MemoryBase *create(const Config& configs, int cacheline)
     {
-        int channels = stoi(options["channels"], NULL, 0);
-        int ranks = stoi(options["ranks"], NULL, 0);
+        int channels = stoi(configs["channels"], NULL, 0);
+        int ranks = stoi(configs["ranks"], NULL, 0);
         
-        validate(channels, ranks, options);
+        validate(channels, ranks, configs);
 
-        string& org_name = options["org"];
-        string& speed_name = options["speed"];
+        const string& org_name = configs["org"];
+        const string& speed_name = configs["speed"];
 
         T *spec = new T(org_name, speed_name);
 

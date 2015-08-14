@@ -33,6 +33,13 @@ public:
       }
     }
 
+    bool contains(const std::string& name) const {
+      if (options.find(name) != options.end()) {
+        return true;
+      } else {
+        return false;
+      }
+    }
     int get_channels() const {return channels;}
     int get_subarrays() const {return subarrays;}
     int get_ranks() const {return ranks;}

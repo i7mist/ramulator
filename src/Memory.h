@@ -1,6 +1,7 @@
 #ifndef __MEMORY_H
 #define __MEMORY_H
 
+#include "Config.h"
 #include "DRAM.h"
 #include "Request.h"
 #include "Controller.h"
@@ -43,13 +44,28 @@ public:
         MAX,
     } type = Type::RoBaRaCoCh;
 
+    enum class Translation {
+      None,
+      Random,
+      MAX,
+    } translation = Translation::None;
+
+    std::map<string, Translation> name_to_translation = {
+      {"None", Translation::None},
+      {"Random", Translation::Random},
+    };
+
+    vector<bool> free_physical_pages;
+    long free_physical_pages_remaining;
+    map<long, long> page_translation;
+
     vector<Controller<T>*> ctrls;
     T * spec;
     vector<int> addr_bits;
 
     int tx_bits;
 
-    Memory(vector<Controller<T>*> ctrls)
+    Memory(const Config& configs, vector<Controller<T>*> ctrls)
         : ctrls(ctrls),
           spec(ctrls[0]->channel->spec),
           addr_bits(int(T::Level::MAX))
@@ -75,6 +91,18 @@ public:
         }
 
         addr_bits[int(T::Level::MAX) - 1] -= calc_log2(spec->prefetch_size);
+
+        // Initiating translation
+        if (configs.contains("translation")) {
+          translation = name_to_translation[configs["translation"]];
+        }
+        if (translation != Translation::None) {
+          // construct a list of available pages
+          // TODO: this should not assume a 4KB page!
+          free_physical_pages_remaining = max_address >> 12;
+
+          free_physical_pages.resize(free_physical_pages_remaining, true);
+        }
 
         dram_capacity
             .name("dram_capacity")
@@ -123,9 +151,51 @@ public:
     bool send(Request req)
     {
         req.addr_vec.resize(addr_bits.size());
-//         long addr = req.addr;
-         long addr = req.addr & (~((1 << tx_bits) - 1));
-        assert(slice_lower_bits(addr, tx_bits) == 0); // check address alignment
+        long addr;
+
+        long virtual_page_number = req.addr >> 12;
+
+        switch(int(translation)) {
+            case int(Translation::None):
+                addr = req.addr;
+                break;
+            case int(Translation::Random):
+                if(page_translation.find(virtual_page_number) == page_translation.end()) {
+                    // page doesn't exist, so assign a new page
+                    // make sure there are physical pages left to be assigned
+                    assert(free_physical_pages_remaining);
+
+                    // assign a new page
+                    long phys_page_to_read = lrand() % free_physical_pages.size();
+                    // if the randomly-selected page was already assigned
+                    if(!free_physical_pages[phys_page_to_read]) {
+                        long starting_page_of_search = phys_page_to_read;
+
+                        do {
+                            // iterate through the list until we find a free page
+                            // TODO: does this introduce serious non-randomness?
+                            ++phys_page_to_read;
+                            phys_page_to_read %= free_physical_pages.size();
+                        }
+                        while((phys_page_to_read != starting_page_of_search) && !free_physical_pages[phys_page_to_read]);
+                    }
+
+                    assert(free_physical_pages[phys_page_to_read]);
+
+                    page_translation[virtual_page_number] = phys_page_to_read;
+                    free_physical_pages[phys_page_to_read] = false;
+                    --free_physical_pages_remaining;
+                }
+
+                // SAUGATA TODO: page size should not always be fixed to 4KB
+                addr = page_translation[virtual_page_number] << 12;
+                addr |= (req.addr & ((1 << 12) - 1));
+                break;
+            default:
+                assert(false);
+        }
+
+        clear_lower_bits(addr, tx_bits);
 
         switch(int(type)){
             case int(Type::ChRaBaRoCo):
@@ -141,13 +211,7 @@ public:
             default:
                 assert(false);
         }
-        // req.addr_phy = req.addr_vec[0];
-        // for (int i = 1; i < addr_bits.size(); i ++)
-        //     req.addr_phy = (req.addr_phy<<addr_bits[i]) + req.addr_vec[i];
-        // req.addr_phy <<= tx_bits;
-        // assert(addr == 0); // check address is within range
 
-        // dispatch to the right channel
         if(ctrls[req.addr_vec[0]]->enqueue(req)) {
             // tally stats here to avoid double counting for requests that aren't enqueued
             ++num_incoming_requests;
@@ -179,6 +243,17 @@ private:
         int lbits = addr & ((1<<bits) - 1);
         addr >>= bits;
         return lbits;
+    }
+    void clear_lower_bits(long& addr, int bits)
+    {
+        addr >>= bits;
+    }
+    long lrand(void) {
+        if(sizeof(int) < sizeof(long)) {
+            return static_cast<long>(rand()) << (sizeof(int) * 8) | rand();
+        }
+
+        return rand();
     }
 };
 

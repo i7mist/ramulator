@@ -30,7 +30,8 @@ public:
         spec->channel_width *= gang_number;
     }
 
-    static Memory<T> *populate_memory(T *spec, int channels, int ranks) {
+    static Memory<T> *populate_memory(const Config& configs,
+        T *spec, int channels, int ranks) {
         int& default_ranks = spec->org_entry.count[int(T::Level::Rank)];
         int& default_channels = spec->org_entry.count[int(T::Level::Channel)];
 
@@ -43,7 +44,7 @@ public:
             channel->id = c;
             ctrls.push_back(new Controller<T>(channel));
         }
-        return new Memory<T>(ctrls);
+        return new Memory<T>(configs, ctrls);
     }
 
     static void validate(int channels, int ranks, const Config& configs) {
@@ -64,7 +65,7 @@ public:
 
         extend_channel_width(spec, cacheline);
 
-        return (MemoryBase *)populate_memory(spec, channels, ranks);
+        return (MemoryBase *)populate_memory(configs, spec, channels, ranks);
     }
 };
 

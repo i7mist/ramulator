@@ -44,7 +44,7 @@ MemoryBase *MemoryFactory<WideIO2>::create(const Config& configs, int cacheline)
 
     extend_channel_width(spec, cacheline);
 
-    return (MemoryBase *)populate_memory(spec, channels, ranks);
+    return (MemoryBase *)populate_memory(configs, spec, channels, ranks);
 }
 
 
@@ -63,7 +63,7 @@ MemoryBase *MemoryFactory<SALP>::create(const Config& configs, int cacheline) {
 
     extend_channel_width(spec, cacheline);
 
-    return (MemoryBase *)populate_memory(spec, channels, ranks);
+    return (MemoryBase *)populate_memory(configs, spec, channels, ranks);
 }
 
 }  /* namespace ramulator */

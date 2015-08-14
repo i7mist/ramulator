@@ -66,15 +66,6 @@ void run_dramtrace(const Config& configs, Memory<T, Controller>& memory, const c
     }
     Stats::statlist.printall();
 
-    /* report statistics */
-//
-//     double tCK = memory.clk_ns(), t = tCK * clks;
-//     double rbw = 64.0 * reads / 1024 / 1024 / 1024 / (t / 1e9);
-//     double wbw = 64.0 * writes / 1024 / 1024 / 1024 / (t / 1e9);
-//
-//     printf("Simulation done %d clocks [%.3lfns], %d reads [%.3lf GB/s], %d writes [%.3lf GB/s]\n",
-//         clks, t, reads, rbw, writes, wbw);
-
 }
 
 template <typename T>
@@ -85,7 +76,6 @@ void run_cputrace(const Config& configs, Memory<T, Controller>& memory, const st
     auto send = bind(&Memory<T, Controller>::send, &memory, placeholders::_1);
     Processor proc(configs, files, send);
     for (long i = 0; ; i++) {
-        // if (i % 100000000 == 0) printf("%ld clocks\n", i);
         proc.tick();
         Stats::curTick++; // processor clock, global, for Statistics
         if (i % cpu_tick == (cpu_tick - 1))
@@ -116,7 +106,7 @@ void start_run(const Config& configs, T* spec, const vector<const char*>& files)
     Controller<T>* ctrl = new Controller<T>(channel);
     ctrls.push_back(ctrl);
   }
-  Memory<T, Controller> memory(ctrls);
+  Memory<T, Controller> memory(configs, ctrls);
 
   assert(files.size() != 0);
   if (configs["trace_type"] == "CPU") {

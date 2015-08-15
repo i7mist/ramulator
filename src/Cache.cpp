@@ -164,6 +164,10 @@ bool Cache::send(Request req) {
     }
 
     auto newline = allocate_line(lines, req.addr);
+    if (newline == lines.end()) {
+      return false;
+    }
+
     newline->dirty = dirty;
 
     // Add to MSHR entries
@@ -188,6 +192,7 @@ void Cache::evictline(long addr, bool dirty) {
   auto line = find_if(lines.begin(), lines.end(),
       [addr, this](Line l){return (l.tag == get_tag(addr));});
 
+  assert(line != lines.end());
   // Update LRU queue. The dirty bit will be set if the dirty
   // bit inherited from higher level(s) is set.
   lines.push_back(Line(addr, get_tag(addr), false,
@@ -209,7 +214,8 @@ std::pair<long, bool> Cache::invalidate(long addr) {
 
   // If the line is in this level cache, then erase it from
   // the buffer.
-  if (line != lines.end() && !line->lock) {
+  if (line != lines.end()) {
+    assert(!line->lock);
     debug("invalidate %lx @ level %d", addr, int(level));
     lines.erase(line);
   } else {
@@ -287,9 +293,22 @@ std::list<Cache::Line>::iterator Cache::allocate_line(
     // Get victim.
     // The first one might still be locked due to reorder in MC
     auto victim = find_if(lines.begin(), lines.end(),
-        [](Line line) {
-          return !line.lock;
+        [this](Line line) {
+          bool check = !line.lock;
+          if (!is_first_level) {
+            for (auto hc : higher_cache) {
+              if(!check) {
+                return check;
+              }
+              check = check && hc->check_unlock(line.addr);
+            }
+          }
+          return check;
         });
+    if (victim == lines.end()) {
+      return victim;  // doesn't exist a line that's already unlocked in each level
+    }
+    assert(victim != lines.end());
     evict(&lines, victim);
   }
 

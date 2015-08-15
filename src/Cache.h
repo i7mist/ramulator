@@ -147,6 +147,31 @@ protected:
     return true;
   }
 
+  bool check_unlock(long addr) {
+    auto it = cache_lines.find(get_index(addr));
+    if (it == cache_lines.end()) {
+      return true;
+    } else {
+      auto& lines = it->second;
+      auto line = find_if(lines.begin(), lines.end(),
+          [addr, this](Line l){return (l.tag == get_tag(addr));});
+      if (line == lines.end()) {
+        return true;
+      } else {
+        bool check = !line->lock;
+        if (!is_first_level) {
+          for (auto hc : higher_cache) {
+            if (!check) {
+              return check;
+            }
+            check = check && hc->check_unlock(line->addr);
+          }
+        }
+        return check;
+      }
+    }
+  }
+
   std::vector<std::pair<long, std::list<Line>::iterator>>::iterator
   hit_mshr(long addr) {
     auto mshr_it =

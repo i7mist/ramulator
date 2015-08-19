@@ -76,9 +76,10 @@ public:
           addr_bits(int(T::Level::MAX))
     {
         // make sure 2^N channels/ranks
+        // TODO support channel number that is not powers of 2
         int *sz = spec->org_entry.count;
-//         assert((sz[0] & (sz[0] - 1)) == 0);
-//         assert((sz[1] & (sz[1] - 1)) == 0);
+        assert((sz[0] & (sz[0] - 1)) == 0);
+        assert((sz[1] & (sz[1] - 1)) == 0);
         // validate size of one transaction
         int tx = (spec->prefetch_size * spec->channel_width / 8);
         tx_bits = calc_log2(tx);
@@ -177,9 +178,9 @@ public:
         bool is_active = false;
         bool is_refresh = false;
         for (auto ctrl : ctrls) {
-          ctrl->tick();
           is_active = is_active || ctrl->is_active();
           is_refresh = is_refresh || ctrl->is_refresh();
+          ctrl->tick();
         }
         if (is_active) {
           ramulator_active_cycles++;

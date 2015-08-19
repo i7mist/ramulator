@@ -37,7 +37,7 @@ protected:
     ScalarStat req_queue_length_sum;
     ScalarStat act_cmd_count;
     ScalarStat non_auto_precharge_count;
-    ScalarStat average_wait_issue_time;
+    ScalarStat sum_wait_issue_time;
 public:
     /* Member Variables */
     long clk = 0;
@@ -143,9 +143,9 @@ public:
             .precision(0)
             ;
 
-        average_wait_issue_time
-            .name("average_wait_issue_time"+to_string(channel->id))
-            .desc("The average time that a R/W request is waiting to be issued per channel.")
+        sum_wait_issue_time
+            .name("sum_wait_issue_time"+to_string(channel->id))
+            .desc("The total time that a R/W request is waiting to be issued per channel.")
             .precision(0)
             ;
     }
@@ -246,7 +246,7 @@ public:
         if (req->is_first_command) {
             req->is_first_command = false;
             if (req->type == Request::Type::READ || req->type == Request::Type::WRITE) {
-              average_wait_issue_time += clk - req->arrive;
+              sum_wait_issue_time += clk - req->arrive;
               channel->update_serving_requests(req->addr_vec.data(), 1);
             }
             int tx = (channel->spec->prefetch_size * channel->spec->channel_width / 8);

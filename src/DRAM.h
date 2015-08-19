@@ -1,6 +1,7 @@
 #ifndef __DRAM_H
 #define __DRAM_H
 
+#include "Statistics.h"
 #include <iostream>
 #include <vector>
 #include <deque>
@@ -19,6 +20,11 @@ template <typename T>
 class DRAM
 {
 public:
+    ScalarStat total_active_cycles;
+    ScalarStat total_serving_requests;
+    ScalarStat total_refresh_cycles;
+    ScalarStat total_busy_cycles;
+
     // Constructor
     DRAM(T* spec, typename T::Level level);
     ~DRAM();
@@ -58,6 +64,23 @@ public:
 
     // Update the timing/state of the tree, signifying that a command has been issued
     void update(typename T::Command cmd, const int* addr, long clk);
+    // Update statistics:
+
+    // Update the number of requests it serves currently
+    void update_serving_requests(const int* addr, int delta);
+
+    // Update the sum of total active cycle
+    void update_active_cycle();
+
+    // Update the sum of total refresh cycle
+    void update_refresh_cycle(long clk);
+
+    // Update the sum of total busy cycle, including active and refresh
+    void update_busy_cycle(long clk);
+
+    // TIANSHI: current serving requests count
+    int cur_serving_requests = 0;
+    long end_of_refreshing = -1;
 
 private:
     // Constructor
@@ -128,6 +151,29 @@ DRAM<T>::DRAM(T* spec, typename T::Level level) :
         child->id = i;
         children.push_back(child);
     }
+
+    // regStats
+    total_active_cycles
+        .name("total_active_cycles level " + to_string(int(level)) + " id " + to_string(id))
+        .desc("Total active cycles for level " + to_string(int(level)) + " id " + to_string(id))
+        .precision(0)
+        ;
+    total_serving_requests
+        .name("total_serving_requests level " + to_string(int(level)) + " id " + to_string(id))
+        .desc("The sum of serving read/write requests per cycle for level " + to_string(int(level)) + " id " + to_string(id))
+        .precision(0)
+        ;
+    total_refresh_cycles
+        .name("total_refresh_cycles"+to_string(id))
+        .desc("The sum of cycles that is under refresh per cycle for level " + to_string(int(level)) + " id " + to_string(id))
+        .precision(0)
+        ;
+    total_busy_cycles
+        .name("total_busy_cycles"+to_string(id))
+        .desc("The sum of cycles that is active or under refresh per cycle for level " + to_string(int(level)) + " id " + to_string(id))
+        .precision(0)
+        ;
+
 }
 
 template <typename T>
@@ -256,7 +302,7 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk)
 
     // I am a target node
     if (prev[int(cmd)].size()) {
-        prev[int(cmd)].pop_back();
+        prev[int(cmd)].pop_back();  // FIXME TIANSHI why pop back?
         prev[int(cmd)].push_front(clk); // update history
     }
 
@@ -270,6 +316,10 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk)
 
         long future = past + t.val;
         next[int(t.cmd)] = max(next[int(t.cmd)], future); // update future
+        // TIANSHI: for refresh statistics
+        if (spec->is_refreshing(cmd) && spec->is_opening(t.cmd)) {
+          end_of_refreshing = max(end_of_refreshing, next[int(t.cmd)]);
+        }
     }
 
     // Some commands have timings that are higher that their scope levels, thus
@@ -280,6 +330,66 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk)
     // recursively update *all* of my children
     for (auto child : children)
         child->update_timing(cmd, addr, clk);
+
+    // TIANSHI: update end_of_refreshing by children
+    for (auto child : children) {
+        end_of_refreshing = max(end_of_refreshing, child->end_of_refreshing);
+    }
+}
+
+template <typename T>
+void DRAM<T>::update_serving_requests(const int* addr, int delta) {
+  assert(id == addr[int(level)]);
+  cur_serving_requests += delta;
+  int child_id = addr[int(level) + 1];
+  // We only count the level higher than bank
+  if (child_id < 0 || !children.size() || (int(level) > int(T::Level::Bank)) ) {
+    return;
+  }
+  children[addr[int(level)+1]]->update_serving_requests(addr, delta);
+}
+
+template <typename T>
+void DRAM<T>::update_active_cycle() {
+  if (cur_serving_requests > 0) {
+    total_active_cycles++;
+    total_serving_requests += cur_serving_requests;
+  }
+  // We only count the level before bank
+  if (!children.size() || int(level) >= int(T::Level::Bank)) {
+    return;
+  }
+  for (auto child : children) {
+    child->update_active_cycle();
+  }
+}
+
+template <typename T>
+void DRAM<T>::update_refresh_cycle(long clk) {
+  // also include the time to close banks. Because otherq will be
+  // prioritized before read/write, so they won't be interrupted.
+  if (clk <= end_of_refreshing) {
+    total_refresh_cycles++;
+  }
+  if (!children.size() || int(level) > int(T::Level::Bank)) {
+    return;
+  }
+  for (auto child : children) {
+    child->update_refresh_cycle(clk);
+  }
+}
+
+template <typename T>
+void DRAM<T>::update_busy_cycle(long clk) {
+  if ((clk <= end_of_refreshing) || (cur_serving_requests > 0)) {
+    total_busy_cycles++;
+  }
+  if (!children.size() || int(level) > int(T::Level::Bank)) {
+    return;
+  }
+  for (auto child : children) {
+    child->update_busy_cycle(clk);
+  }
 }
 
 } /* namespace ramulator */

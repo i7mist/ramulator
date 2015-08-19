@@ -34,6 +34,11 @@ protected:
   ScalarStat dram_capacity;
   ScalarStat num_dram_cycles;
   ScalarStat num_incoming_requests;
+  ScalarStat num_read_requests;
+  ScalarStat num_write_requests;
+  ScalarStat ramulator_active_cycles;
+  ScalarStat ramulator_refresh_cycles;
+  ScalarStat ramulator_busy_cycles;
   VectorStat incoming_requests_per_channel;
 
   long max_address;
@@ -72,8 +77,8 @@ public:
     {
         // make sure 2^N channels/ranks
         int *sz = spec->org_entry.count;
-        assert((sz[0] & (sz[0] - 1)) == 0);
-        assert((sz[1] & (sz[1] - 1)) == 0);
+//         assert((sz[0] & (sz[0] - 1)) == 0);
+//         assert((sz[1] & (sz[1] - 1)) == 0);
         // validate size of one transaction
         int tx = (spec->prefetch_size * spec->channel_width / 8);
         tx_bits = calc_log2(tx);
@@ -121,10 +126,35 @@ public:
             .desc("Number of incoming requests to DRAM")
             .precision(0)
             ;
+        num_read_requests
+            .name("read_requests")
+            .desc("Number of incoming read requests to DRAM")
+            .precision(0)
+            ;
+        num_write_requests
+            .name("write_requests")
+            .desc("Number of incoming write requests to DRAM")
+            .precision(0)
+            ;
         incoming_requests_per_channel
             .init(sz[int(T::Level::Channel)])
             .name("incoming_requests_per_channel")
             .desc("Number of incoming requests to each DRAM channel")
+            ;
+        ramulator_active_cycles
+            .name("ramulator_active_cycles")
+            .desc("The total number of cycles that the DRAM part is active (serving R/W)")
+            .precision(0)
+            ;
+        ramulator_refresh_cycles
+            .name("ramulator_refresh_cycles")
+            .desc("The total number of cycles that the DRAM part is under refresh")
+            .precision(0)
+            ;
+        ramulator_busy_cycles
+            .name("ramulator_busy_cycles")
+            .desc("The total number of cycles that the DRAM part is active or under refresh")
+            .precision(0)
             ;
     }
 
@@ -144,8 +174,22 @@ public:
     {
         ++num_dram_cycles;
 
-        for (auto ctrl : ctrls)
-            ctrl->tick();
+        bool is_active = false;
+        bool is_refresh = false;
+        for (auto ctrl : ctrls) {
+          ctrl->tick();
+          is_active = is_active || ctrl->is_active();
+          is_refresh = is_refresh || ctrl->is_refresh();
+        }
+        if (is_active) {
+          ramulator_active_cycles++;
+        }
+        if (is_refresh) {
+          ramulator_refresh_cycles++;
+        }
+        if (is_active || is_refresh) {
+          ramulator_busy_cycles++;
+        }
     }
 
     bool send(Request req)
@@ -215,6 +259,12 @@ public:
         if(ctrls[req.addr_vec[0]]->enqueue(req)) {
             // tally stats here to avoid double counting for requests that aren't enqueued
             ++num_incoming_requests;
+            if (req.type == Request::Type::READ) {
+              ++num_read_requests;
+            }
+            if (req.type == Request::Type::WRITE) {
+              ++num_write_requests;
+            }
             ++incoming_requests_per_channel[req.addr_vec[int(T::Level::Channel)]];
             return true;
         }

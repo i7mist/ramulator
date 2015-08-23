@@ -119,6 +119,28 @@ template <typename T>
 DRAM<T>::DRAM(T* spec, typename T::Level level) :
     spec(spec), level(level), id(0), parent(NULL)
 {
+    // regStats
+    total_active_cycles
+        .name("total_active_cycles_level_" + to_string(int(level)) + "_id_" + to_string(id))
+        .desc("Total active cycles_for_level_" + to_string(int(level)) + "_id_" + to_string(id))
+        .precision(0)
+        ;
+    total_serving_requests
+        .name("total_serving_requests_level_" + to_string(int(level)) + "_id_" + to_string(id))
+        .desc("The sum of serving read/write requests per cycle for level " + to_string(int(level)) + " id " + to_string(id))
+        .precision(0)
+        ;
+    total_refresh_cycles
+        .name("total_refresh_cycles_level_" + to_string(int(level)) + "_id_" + to_string(id))
+        .desc("The sum of cycles that is under refresh per cycle for level " + to_string(int(level)) + " id " + to_string(id))
+        .precision(0)
+        ;
+    total_busy_cycles
+        .name("total_busy_cycles_level_" + to_string(int(level)) + "_id_" + to_string(id))
+        .desc("The sum of cycles that is active or under refresh per cycle for level " + to_string(int(level)) + " id " + to_string(id))
+        .precision(0)
+        ;
+
     state = spec->start[(int)level];
     prereq = spec->prereq[int(level)];
     rowhit = spec->rowhit[int(level)]; // SAUGATA: added row hit table
@@ -152,27 +174,7 @@ DRAM<T>::DRAM(T* spec, typename T::Level level) :
         children.push_back(child);
     }
 
-    // regStats
-    total_active_cycles
-        .name("total_active_cycles_level_" + to_string(int(level)) + "_id_" + to_string(id))
-        .desc("Total active cycles_for_level_" + to_string(int(level)) + "_id_" + to_string(id))
-        .precision(0)
-        ;
-    total_serving_requests
-        .name("total_serving_requests_level_" + to_string(int(level)) + "_id_" + to_string(id))
-        .desc("The sum of serving read/write requests per cycle for level " + to_string(int(level)) + " id " + to_string(id))
-        .precision(0)
-        ;
-    total_refresh_cycles
-        .name("total_refresh_cycles_level_" + to_string(int(level)) + "_id_" + to_string(id))
-        .desc("The sum of cycles that is under refresh per cycle for level " + to_string(int(level)) + " id " + to_string(id))
-        .precision(0)
-        ;
-    total_busy_cycles
-        .name("total_busy_cycles_level_" + to_string(int(level)) + "_id_" + to_string(id))
-        .desc("The sum of cycles that is active or under refresh per cycle for level " + to_string(int(level)) + " id " + to_string(id))
-        .precision(0)
-        ;
+
 
 }
 

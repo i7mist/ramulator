@@ -71,6 +71,26 @@ public:
       }
       return true;
     }
+    bool record_cmd_trace() const {
+      // the default value is false
+      if (options.find("record_cmd_trace") != options.end()) {
+        if ((options.find("record_cmd_trace"))->second == "on") {
+          return true;
+        }
+        return false;
+      }
+      return false;
+    }
+    bool print_cmd_trace() const {
+      // the default value is false
+      if (options.find("print_cmd_trace") != options.end()) {
+        if ((options.find("print_cmd_trace"))->second == "on") {
+          return true;
+        }
+        return false;
+      }
+      return false;
+    }
 };
 
 

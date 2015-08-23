@@ -103,7 +103,7 @@ void start_run(const Config& configs, T* spec, const vector<const char*>& files)
   for (int c = 0 ; c < C ; c++) {
     DRAM<T>* channel = new DRAM<T>(spec, T::Level::Channel);
     channel->id = c;
-    Controller<T>* ctrl = new Controller<T>(channel);
+    Controller<T>* ctrl = new Controller<T>(configs, channel);
     ctrls.push_back(ctrl);
   }
   Memory<T, Controller> memory(configs, ctrls);

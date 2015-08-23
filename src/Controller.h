@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "Config.h"
 #include "DRAM.h"
 #include "Refresh.h"
 #include "Request.h"
@@ -67,10 +68,10 @@ public:
     vector<ofstream> cmd_trace_files;
     bool record_cmd_trace = false;
     /* Commands to stdout */
-    bool print_cmd_trace = false;
+    bool print_cmd_trace = true;
 
     /* Constructor */
-    Controller(DRAM<T>* channel) :
+    Controller(const Config& configs, DRAM<T>* channel) :
         channel(channel),
         scheduler(new Scheduler<T>(this)),
         rowpolicy(new RowPolicy<T>(this)),
@@ -78,7 +79,12 @@ public:
         refresh(new Refresh<T>(this)),
         cmd_trace_files(channel->children.size())
     {
+        record_cmd_trace = configs.record_cmd_trace();
+        print_cmd_trace = configs.print_cmd_trace();
         if (record_cmd_trace){
+            if (configs["cmd_trace_prefix"] != "") {
+              cmd_trace_prefix = configs["cmd_trace_prefix"];
+            }
             string prefix = cmd_trace_prefix + "chan-" + to_string(channel->id) + "-rank-";
             string suffix = ".cmdtrace";
             for (unsigned int i = 0; i < channel->children.size(); i++)
@@ -197,6 +203,7 @@ public:
         // TODO update at each cycle or sample it in a fixed interval?
         channel->update_active_cycle();
         channel->update_refresh_cycle(clk);
+        channel->update_busy_cycle(clk);
 
         /*** 1. Serve completed reads ***/
         if (pending.size()) {

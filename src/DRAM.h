@@ -344,7 +344,7 @@ void DRAM<T>::update_serving_requests(const int* addr, int delta) {
   assert(id == addr[int(level)]);
   cur_serving_requests += delta;
   int child_id = addr[int(level) + 1];
-  // We only count the level higher than bank
+  // We only count the level bank or the level higher than bank
   if (child_id < 0 || !children.size() || (int(level) > int(T::Level::Bank)) ) {
     return;
   }
@@ -357,8 +357,8 @@ void DRAM<T>::update_active_cycle() {
     total_active_cycles++;
     total_serving_requests += cur_serving_requests;
   }
-  // We only count the level before bank
-  if (!children.size() || int(level) >= int(T::Level::Bank)) {
+  // We only count the level bank or the level before bank
+  if (!children.size() || int(level) > int(T::Level::Bank)) {
     return;
   }
   for (auto child : children) {
@@ -373,6 +373,9 @@ void DRAM<T>::update_refresh_cycle(long clk) {
   if (clk <= end_of_refreshing) {
     total_refresh_cycles++;
   }
+  // We only count bank level or the level before bank
+  // TODO Because we havn't implement per-bank refresh, the count
+  // for bank level will always be zero.
   if (!children.size() || int(level) > int(T::Level::Bank)) {
     return;
   }
@@ -386,6 +389,7 @@ void DRAM<T>::update_busy_cycle(long clk) {
   if ((clk <= end_of_refreshing) || (cur_serving_requests > 0)) {
     total_busy_cycles++;
   }
+  // We only count bank level or the level before bank
   if (!children.size() || int(level) > int(T::Level::Bank)) {
     return;
   }

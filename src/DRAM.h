@@ -82,6 +82,9 @@ public:
     int cur_serving_requests = 0;
     long end_of_refreshing = -1;
 
+    // register statistics
+    void regStats();
+
 private:
     // Constructor
     DRAM(){}
@@ -113,13 +116,10 @@ private:
     void update_timing(typename T::Command cmd, const int* addr, long clk);
 }; /* class DRAM */
 
-
-// Constructor
+// register statistics
 template <typename T>
-DRAM<T>::DRAM(T* spec, typename T::Level level) :
-    spec(spec), level(level), id(0), parent(NULL)
-{
-    // regStats
+void DRAM<T>::regStats() {
+
     total_active_cycles
         .name("total_active_cycles_level_" + to_string(int(level)) + "_id_" + to_string(id))
         .desc("Total active cycles_for_level_" + to_string(int(level)) + "_id_" + to_string(id))
@@ -140,6 +140,13 @@ DRAM<T>::DRAM(T* spec, typename T::Level level) :
         .desc("The sum of cycles that is active or under refresh per cycle for level " + to_string(int(level)) + " id " + to_string(id))
         .precision(0)
         ;
+}
+
+// Constructor
+template <typename T>
+DRAM<T>::DRAM(T* spec, typename T::Level level) :
+    spec(spec), level(level), id(0), parent(NULL)
+{
 
     state = spec->start[(int)level];
     prereq = spec->prereq[int(level)];
@@ -171,6 +178,7 @@ DRAM<T>::DRAM(T* spec, typename T::Level level) :
         DRAM<T>* child = new DRAM<T>(spec, typename T::Level(child_level));
         child->parent = this;
         child->id = i;
+        child->regStats();
         children.push_back(child);
     }
 

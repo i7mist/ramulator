@@ -83,7 +83,7 @@ public:
     long end_of_refreshing = -1;
 
     // register statistics
-    void regStats();
+    void regStats(const std::string& identifier);
 
 private:
     // Constructor
@@ -118,28 +118,37 @@ private:
 
 // register statistics
 template <typename T>
-void DRAM<T>::regStats() {
+void DRAM<T>::regStats(const std::string& identifier) {
 
     total_active_cycles
-        .name("total_active_cycles_level_" + to_string(int(level)) + "_id_" + to_string(id))
+        .name("total_active_cycles" + identifier + "_" + to_string(id))
         .desc("Total active cycles_for_level_" + to_string(int(level)) + "_id_" + to_string(id))
         .precision(0)
         ;
     total_serving_requests
-        .name("total_serving_requests_level_" + to_string(int(level)) + "_id_" + to_string(id))
+        .name("total_serving_requests" + identifier + "_" + to_string(id))
         .desc("The sum of serving read/write requests per cycle for level " + to_string(int(level)) + " id " + to_string(id))
         .precision(0)
         ;
     total_refresh_cycles
-        .name("total_refresh_cycles_level_" + to_string(int(level)) + "_id_" + to_string(id))
+        .name("total_refresh_cycles" + identifier + "_" + to_string(id))
         .desc("The sum of cycles that is under refresh per cycle for level " + to_string(int(level)) + " id " + to_string(id))
         .precision(0)
         ;
     total_busy_cycles
-        .name("total_busy_cycles_level_" + to_string(int(level)) + "_id_" + to_string(id))
+        .name("total_busy_cycles" + identifier + "_" + to_string(id))
         .desc("The sum of cycles that is active or under refresh per cycle for level " + to_string(int(level)) + " id " + to_string(id))
         .precision(0)
         ;
+
+    if (!children.size()) {
+      return;
+    }
+
+    // recursively register children statistics
+    for (auto child : children) {
+      child->regStats(identifier + "_" + to_string(id));
+    }
 }
 
 // Constructor
@@ -178,11 +187,8 @@ DRAM<T>::DRAM(T* spec, typename T::Level level) :
         DRAM<T>* child = new DRAM<T>(spec, typename T::Level(child_level));
         child->parent = this;
         child->id = i;
-        child->regStats();
         children.push_back(child);
     }
-
-
 
 }
 

@@ -41,6 +41,8 @@ protected:
   ScalarStat ramulator_busy_cycles;
   VectorStat incoming_requests_per_channel;
 
+  ScalarStat physical_page_replacement;
+
   long max_address;
 public:
     enum class Type {
@@ -157,6 +159,11 @@ public:
             .desc("The total number of cycles that the DRAM part is active or under refresh")
             .precision(0)
             ;
+        physical_page_replacement
+            .name("physical_page_replacement")
+            .desc("The number of times that physical page replacement happens.")
+            .precision(0)
+            ;
     }
 
     ~Memory()
@@ -208,28 +215,36 @@ public:
                 if(page_translation.find(virtual_page_number) == page_translation.end()) {
                     // page doesn't exist, so assign a new page
                     // make sure there are physical pages left to be assigned
-                    assert(free_physical_pages_remaining);
 
-                    // assign a new page
-                    long phys_page_to_read = lrand() % free_physical_pages.size();
-                    // if the randomly-selected page was already assigned
-                    if(!free_physical_pages[phys_page_to_read]) {
-                        long starting_page_of_search = phys_page_to_read;
+                    // if physical page doesn't remain, replace a previous assigned
+                    // physical page.
+                    if (!free_physical_pages_remaining) {
+                      physical_page_replacement++;
+                      long phys_page_to_read = lrand() % free_physical_pages.size();
+                      assert(!free_physical_pages[phys_page_to_read]);
+                      page_translation[virtual_page_number] = phys_page_to_read;
+                    } else {
+                        // assign a new page
+                        long phys_page_to_read = lrand() % free_physical_pages.size();
+                        // if the randomly-selected page was already assigned
+                        if(!free_physical_pages[phys_page_to_read]) {
+                            long starting_page_of_search = phys_page_to_read;
 
-                        do {
-                            // iterate through the list until we find a free page
-                            // TODO: does this introduce serious non-randomness?
-                            ++phys_page_to_read;
-                            phys_page_to_read %= free_physical_pages.size();
+                            do {
+                                // iterate through the list until we find a free page
+                                // TODO: does this introduce serious non-randomness?
+                                ++phys_page_to_read;
+                                phys_page_to_read %= free_physical_pages.size();
+                            }
+                            while((phys_page_to_read != starting_page_of_search) && !free_physical_pages[phys_page_to_read]);
                         }
-                        while((phys_page_to_read != starting_page_of_search) && !free_physical_pages[phys_page_to_read]);
+
+                        assert(free_physical_pages[phys_page_to_read]);
+
+                        page_translation[virtual_page_number] = phys_page_to_read;
+                        free_physical_pages[phys_page_to_read] = false;
+                        --free_physical_pages_remaining;
                     }
-
-                    assert(free_physical_pages[phys_page_to_read]);
-
-                    page_translation[virtual_page_number] = phys_page_to_read;
-                    free_physical_pages[phys_page_to_read] = false;
-                    --free_physical_pages_remaining;
                 }
 
                 // SAUGATA TODO: page size should not always be fixed to 4KB

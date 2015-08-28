@@ -1,8 +1,10 @@
 *.swp
 
 # Compiled Object files
-*.o
+obj/
 
 # Compiled target executable files
-ramulator-dramtrace ramulator-cputrace
+ramulator
 
+# smoketest output
+smoketest-DDR3-chan-0-rank-0.cmdtrace

@@ -67,20 +67,17 @@ public:
     // Update statistics:
 
     // Update the number of requests it serves currently
-    void update_serving_requests(const int* addr, int delta);
-
-    // Update the sum of total active cycle
-    void update_active_cycle();
-
-    // Update the sum of total refresh cycle
-    void update_refresh_cycle(long clk);
-
-    // Update the sum of total busy cycle, including active and refresh
-    void update_busy_cycle(long clk);
+    void update_serving_requests(const int* addr, int delta, long clk);
 
     // TIANSHI: current serving requests count
     int cur_serving_requests = 0;
+    long begin_of_serving = -1;
+    long end_of_serving = -1;
+    long begin_of_cur_reqcnt = -1;
+    long begin_of_refreshing = -1;
     long end_of_refreshing = -1;
+    long begin_of_busy = -1;
+    long end_of_busy = -1;
 
     // register statistics
     void regStats(const std::string& identifier);
@@ -334,7 +331,20 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk)
         next[int(t.cmd)] = max(next[int(t.cmd)], future); // update future
         // TIANSHI: for refresh statistics
         if (spec->is_refreshing(cmd) && spec->is_opening(t.cmd)) {
+          assert(past == clk);
+          begin_of_refreshing = clk;
           end_of_refreshing = max(end_of_refreshing, next[int(t.cmd)]);
+          total_refresh_cycles += end_of_refreshing - clk;
+          if (cur_serving_requests > 0) {
+            end_of_busy = max(end_of_busy, clk);
+          }
+          if (begin_of_refreshing > end_of_busy) {
+            total_busy_cycles += end_of_busy - begin_of_busy;
+            begin_of_busy = begin_of_refreshing;
+            end_of_busy = end_of_refreshing;
+          } else {
+            end_of_busy = max(end_of_busy, end_of_refreshing);
+          }
         }
     }
 
@@ -347,69 +357,43 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk)
     for (auto child : children)
         child->update_timing(cmd, addr, clk);
 
-    // TIANSHI: update end_of_refreshing by children
-    for (auto child : children) {
-        end_of_refreshing = max(end_of_refreshing, child->end_of_refreshing);
-    }
 }
 
 template <typename T>
-void DRAM<T>::update_serving_requests(const int* addr, int delta) {
+void DRAM<T>::update_serving_requests(const int* addr, int delta, long clk) {
   assert(id == addr[int(level)]);
+  assert(delta == 1 || delta == -1);
+  // update total serving requests
+  if (begin_of_cur_reqcnt != -1 && cur_serving_requests > 0)
+  total_serving_requests += (clk - begin_of_cur_reqcnt) * cur_serving_requests;
+
+  // update begin of current request number
+  begin_of_cur_reqcnt = clk;
   cur_serving_requests += delta;
+  assert(cur_serving_requests >= 0);
+
+  if (delta == 1 && cur_serving_requests == 1) {
+    // transform from inactive to active
+    begin_of_serving = clk;
+  } else if (cur_serving_requests == 0) {
+    assert(begin_of_serving != -1);
+    assert(delta == -1);
+    total_active_cycles += clk - begin_of_serving;
+    end_of_serving = clk;
+    if (begin_of_serving > end_of_busy) {
+      total_busy_cycles += end_of_busy - begin_of_busy;
+      begin_of_busy = begin_of_serving;
+      end_of_busy = end_of_serving;
+    } else {
+      end_of_busy = max(end_of_busy, end_of_serving);
+    }
+  }
   int child_id = addr[int(level) + 1];
   // We only count the level bank or the level higher than bank
   if (child_id < 0 || !children.size() || (int(level) > int(T::Level::Bank)) ) {
     return;
   }
-  children[addr[int(level)+1]]->update_serving_requests(addr, delta);
-}
-
-template <typename T>
-void DRAM<T>::update_active_cycle() {
-  if (cur_serving_requests > 0) {
-    total_active_cycles++;
-    total_serving_requests += cur_serving_requests;
-  }
-  // We only count the level bank or the level before bank
-  if (!children.size() || int(level) > int(T::Level::Bank)) {
-    return;
-  }
-  for (auto child : children) {
-    child->update_active_cycle();
-  }
-}
-
-template <typename T>
-void DRAM<T>::update_refresh_cycle(long clk) {
-  // also include the time to close banks. Because otherq will be
-  // prioritized before read/write, so they won't be interrupted.
-  if (clk <= end_of_refreshing) {
-    total_refresh_cycles++;
-  }
-  // We only count bank level or the level before bank
-  // TODO Because we havn't implement per-bank refresh, the count
-  // for bank level will always be zero.
-  if (!children.size() || int(level) > int(T::Level::Bank)) {
-    return;
-  }
-  for (auto child : children) {
-    child->update_refresh_cycle(clk);
-  }
-}
-
-template <typename T>
-void DRAM<T>::update_busy_cycle(long clk) {
-  if ((clk <= end_of_refreshing) || (cur_serving_requests > 0)) {
-    total_busy_cycles++;
-  }
-  // We only count bank level or the level before bank
-  if (!children.size() || int(level) > int(T::Level::Bank)) {
-    return;
-  }
-  for (auto child : children) {
-    child->update_busy_cycle(clk);
-  }
+  children[child_id]->update_serving_requests(addr, delta, clk);
 }
 
 } /* namespace ramulator */

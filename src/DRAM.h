@@ -23,7 +23,7 @@ public:
     ScalarStat total_active_cycles;
     ScalarStat total_serving_requests;
     ScalarStat total_refresh_cycles;
-    ScalarStat total_busy_cycles;
+    ScalarStat total_active_and_refresh_cycles;
 
     // Constructor
     DRAM(T* spec, typename T::Level level);
@@ -76,8 +76,7 @@ public:
     long begin_of_cur_reqcnt = -1;
     long begin_of_refreshing = -1;
     long end_of_refreshing = -1;
-    long begin_of_busy = -1;
-    long end_of_busy = -1;
+    std::vector<std::pair<long, long>> refresh_intervals;
 
     // register statistics
     void regStats(const std::string& identifier);
@@ -119,22 +118,22 @@ void DRAM<T>::regStats(const std::string& identifier) {
 
     total_active_cycles
         .name("total_active_cycles" + identifier + "_" + to_string(id))
-        .desc("Total active cycles_for_level_" + to_string(int(level)) + "_id_" + to_string(id))
+        .desc("Total active cycles_for_level_" + identifier + "_" + to_string(id))
         .precision(0)
         ;
     total_serving_requests
         .name("total_serving_requests" + identifier + "_" + to_string(id))
-        .desc("The sum of serving read/write requests per cycle for level " + to_string(int(level)) + " id " + to_string(id))
+        .desc("The sum of serving read/write requests per cycle for level " + identifier + "_" + to_string(id))
         .precision(0)
         ;
     total_refresh_cycles
         .name("total_refresh_cycles" + identifier + "_" + to_string(id))
-        .desc("The sum of cycles that is under refresh per cycle for level " + to_string(int(level)) + " id " + to_string(id))
+        .desc("The sum of cycles that is under refresh per cycle for level " + identifier + "_" + to_string(id))
         .precision(0)
         ;
-    total_busy_cycles
-        .name("total_busy_cycles" + identifier + "_" + to_string(id))
-        .desc("The sum of cycles that is active or under refresh per cycle for level " + to_string(int(level)) + " id " + to_string(id))
+    total_active_and_refresh_cycles
+        .name("total_active_and_refresh_cycles" + identifier + "_" + to_string(id))
+        .desc("The sum of cycles that are active and under refresh per cycle for level " + identifier + "_" + to_string(id))
         .precision(0)
         ;
 
@@ -336,14 +335,7 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk)
           end_of_refreshing = max(end_of_refreshing, next[int(t.cmd)]);
           total_refresh_cycles += end_of_refreshing - clk;
           if (cur_serving_requests > 0) {
-            end_of_busy = max(end_of_busy, clk);
-          }
-          if (begin_of_refreshing > end_of_busy) {
-            total_busy_cycles += end_of_busy - begin_of_busy;
-            begin_of_busy = begin_of_refreshing;
-            end_of_busy = end_of_refreshing;
-          } else {
-            end_of_busy = max(end_of_busy, end_of_refreshing);
+            refresh_intervals.push_back(make_pair(begin_of_refreshing, end_of_refreshing));
           }
         }
     }
@@ -364,9 +356,10 @@ void DRAM<T>::update_serving_requests(const int* addr, int delta, long clk) {
   assert(id == addr[int(level)]);
   assert(delta == 1 || delta == -1);
   // update total serving requests
-  if (begin_of_cur_reqcnt != -1 && cur_serving_requests > 0)
-  total_serving_requests += (clk - begin_of_cur_reqcnt) * cur_serving_requests;
-
+  if (begin_of_cur_reqcnt != -1 && cur_serving_requests > 0) {
+    total_serving_requests += (clk - begin_of_cur_reqcnt) * cur_serving_requests;
+    total_active_cycles += clk - begin_of_cur_reqcnt;
+  }
   // update begin of current request number
   begin_of_cur_reqcnt = clk;
   cur_serving_requests += delta;
@@ -375,19 +368,22 @@ void DRAM<T>::update_serving_requests(const int* addr, int delta, long clk) {
   if (delta == 1 && cur_serving_requests == 1) {
     // transform from inactive to active
     begin_of_serving = clk;
+    if (end_of_refreshing > begin_of_serving) {
+      total_active_and_refresh_cycles += end_of_refreshing - begin_of_serving;
+    }
   } else if (cur_serving_requests == 0) {
+    // transform from active to inactive
     assert(begin_of_serving != -1);
     assert(delta == -1);
-    total_active_cycles += clk - begin_of_serving;
+    total_active_cycles += clk - begin_of_cur_reqcnt;
     end_of_serving = clk;
-    if (begin_of_serving > end_of_busy) {
-      total_busy_cycles += end_of_busy - begin_of_busy;
-      begin_of_busy = begin_of_serving;
-      end_of_busy = end_of_serving;
-    } else {
-      end_of_busy = max(end_of_busy, end_of_serving);
+
+    for (const auto& ref: refresh_intervals) {
+      total_active_and_refresh_cycles += min(end_of_serving, ref.second) - ref.first;
     }
+    refresh_intervals.clear();
   }
+
   int child_id = addr[int(level) + 1];
   // We only count the level bank or the level higher than bank
   if (child_id < 0 || !children.size() || (int(level) > int(T::Level::Bank)) ) {

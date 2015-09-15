@@ -42,9 +42,18 @@ protected:
   VectorStat incoming_requests_per_channel;
 
   ScalarStat physical_page_replacement;
+  ScalarStat maximum_bandwidth;
+  HistogramStat in_DRAM_req_num_hist;
+  ScalarStat in_queue_req_num_sum;
+  ScalarStat in_queue_read_req_num_sum;
+  ScalarStat in_queue_write_req_num_sum;
+  HistogramStat in_queue_req_num_hist;
+  HistogramStat in_queue_read_req_num_hist;
+  HistogramStat in_queue_write_req_num_hist;
 
   long max_address;
 public:
+  HistogramStat all_chan_read_latency_hist;
     enum class Type {
         ChRaBaRoCo,
         RoBaRaCoCh,
@@ -164,6 +173,56 @@ public:
             .desc("The number of times that physical page replacement happens.")
             .precision(0)
             ;
+        maximum_bandwidth
+            .name("maximum_bandwidth")
+            .desc("The theoretical maximum bandwidth (Bps)")
+            .precision(0)
+            ;
+        maximum_bandwidth = spec->speed_entry.rate * 1e6 * spec->channel_width * sz[int(T::Level::Channel)] / 8;
+        in_DRAM_req_num_hist
+            .init(20)
+            .name("in_DRAM_req_num_hist")
+            .desc("Histogram of memory request num in each cycle.")
+            ;
+        in_queue_req_num_sum
+            .name("in_queue_req_num_sum")
+            .desc("Sum of read/write queue length")
+            .precision(0)
+            ;
+        in_queue_read_req_num_sum
+            .name("in_queue_read_req_num_sum")
+            .desc("Sum of read queue length")
+            .precision(0)
+            ;
+        in_queue_write_req_num_sum
+            .name("in_queue_write_req_num_sum")
+            .desc("Sum of write queue length")
+            .precision(0)
+            ;
+        in_queue_req_num_hist
+            .init(20)
+            .name("in_queue_req_num_hist")
+            .desc("Histogram of memory request num in each cycle.")
+            ;
+        in_queue_read_req_num_hist
+            .init(20)
+            .name("in_queue_read_req_num_hist")
+            .desc("Histogram of read request num in each cycle.")
+            ;
+        in_queue_write_req_num_hist
+            .init(20)
+            .name("in_queue_write_req_num_hist")
+            .desc("Histogram of write request num in each cycle.")
+            ;
+        all_chan_read_latency_hist
+            .init(50)
+            .name("all_chan_read_latency_hist")
+            .desc("Histogram of read latency from all channels")
+            ;
+        for (auto ctrl : ctrls) {
+          ctrl->all_chan_read_latency_hist = &all_chan_read_latency_hist;
+        }
+
     }
 
     ~Memory()
@@ -198,6 +257,23 @@ public:
         if (is_active || is_refresh) {
           ramulator_busy_cycles++;
         }
+        int cur_req_num = 0;
+        int cur_que_req_num = 0;
+        int cur_que_readreq_num = 0;
+        int cur_que_writereq_num = 0;
+        for (auto ctrl : ctrls) {
+          cur_req_num += ctrl->channel->cur_serving_requests;
+          cur_que_req_num += ctrl->readq.size() + ctrl->writeq.size();
+          cur_que_readreq_num += ctrl->readq.size();
+          cur_que_writereq_num += ctrl->writeq.size();
+        }
+        in_DRAM_req_num_hist.sample(cur_req_num, 1);
+        in_queue_req_num_hist.sample(cur_que_req_num, 1);
+        in_queue_read_req_num_hist.sample(cur_que_readreq_num, 1);
+        in_queue_write_req_num_hist.sample(cur_que_writereq_num, 1);
+        in_queue_req_num_sum += cur_que_req_num;
+        in_queue_read_req_num_sum += cur_que_readreq_num;
+        in_queue_write_req_num_sum += cur_que_writereq_num;
     }
 
     bool send(Request req)

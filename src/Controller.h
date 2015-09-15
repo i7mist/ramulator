@@ -36,14 +36,22 @@ protected:
     ScalarStat write_row_miss;
     ScalarStat write_row_conflict;
 
-    ScalarStat memory_latency_sum;
+    ScalarStat read_latency_sum;
     ScalarStat req_queue_length_sum;
     ScalarStat act_cmd_count;
     ScalarStat read_act_cmd_count;
     ScalarStat non_auto_precharge_count;
     ScalarStat read_non_auto_precharge_count;
-    ScalarStat sum_wait_issue_time;
+    ScalarStat wait_issue_time_sum;
+    ScalarStat read_wait_issue_time_sum;
+    ScalarStat write_wait_issue_time_sum;
+    HistogramStat wait_issue_time_hist;
+    HistogramStat read_wait_issue_time_hist;
+    HistogramStat write_wait_issue_time_hist;
+    ScalarStat read_req_queue_length_sum;
+    ScalarStat write_req_queue_length_sum;
 public:
+    HistogramStat* all_chan_read_latency_hist;
     /* Member Variables */
     long clk = 0;
     DRAM<T>* channel;
@@ -139,8 +147,9 @@ public:
             .desc("The total write data amount per channel")
             .precision(0)
             ;
-        memory_latency_sum
-            .name("memory_latency_sum_"+to_string(channel->id))
+
+        read_latency_sum
+            .name("read_latency_sum_"+to_string(channel->id))
             .desc("The memory latency sum for all read requests in this channel")
             .precision(0)
             ;
@@ -148,6 +157,18 @@ public:
         req_queue_length_sum
             .name("req_queue_length_sum_"+to_string(channel->id))
             .desc("Sum of read and write queue length per cycle per channel.")
+            .precision(0)
+            ;
+
+        read_req_queue_length_sum
+            .name("read_req_queue_length_sum_"+to_string(channel->id))
+            .desc("Sum of read queue length per cycle per channel.")
+            .precision(0)
+            ;
+
+        write_req_queue_length_sum
+            .name("write_req_queue_length_sum_"+to_string(channel->id))
+            .desc("Sum of write queue length per cycle per channel.")
             .precision(0)
             ;
 
@@ -175,11 +196,39 @@ public:
             .precision(0)
             ;
 
-        sum_wait_issue_time
-            .name("sum_wait_issue_time"+to_string(channel->id))
+        wait_issue_time_sum
+            .name("wait_issue_time_sum"+to_string(channel->id))
             .desc("The total time that a R/W request is waiting to be issued per channel.")
             .precision(0)
             ;
+
+        read_wait_issue_time_sum
+            .name("read_wait_issue_time_sum"+to_string(channel->id))
+            .desc("The total time that a READ request is waiting to be issued per channel.")
+            .precision(0)
+            ;
+
+        write_wait_issue_time_sum
+            .name("write_wait_issue_time_sum"+to_string(channel->id))
+            .desc("The total time that a WRITE request is waiting to be issued per channel.")
+            .precision(0)
+            ;
+        wait_issue_time_hist
+            .init(50)
+            .name("wait_issue_time_hist"+to_string(channel->id))
+            .desc("Histogram of wait to issue time for all requests.")
+            ;
+        read_wait_issue_time_hist
+            .init(50)
+            .name("read_wait_issue_time_hist"+to_string(channel->id))
+            .desc("Histogram of wait to issue time for READ requests.")
+            ;
+        write_wait_issue_time_hist
+            .init(50)
+            .name("write_wait_issue_time_hist"+to_string(channel->id))
+            .desc("Histogram of wait to issue time for WRITE requests.")
+            ;
+
     }
 
     ~Controller(){
@@ -226,13 +275,16 @@ public:
     {
         clk++;
         req_queue_length_sum += readq.size() + writeq.size();
+        read_req_queue_length_sum += readq.size();
+        write_req_queue_length_sum += writeq.size();
 
         /*** 1. Serve completed reads ***/
         if (pending.size()) {
             Request& req = pending[0];
             if (req.depart <= clk) {
                 if (req.depart - req.arrive > 1) { // this request really accessed a row
-                  memory_latency_sum += req.depart - req.arrive;
+                  read_latency_sum += req.depart - req.arrive;
+                  all_chan_read_latency_hist->sample(req.depart-req.arrive, 1);
                   channel->update_serving_requests(
                       req.addr_vec.data(), -1, clk);
                 }
@@ -276,7 +328,15 @@ public:
         if (req->is_first_command) {
             req->is_first_command = false;
             if (req->type == Request::Type::READ || req->type == Request::Type::WRITE) {
-              sum_wait_issue_time += clk - req->arrive;
+              wait_issue_time_sum += clk - req->arrive;
+              wait_issue_time_hist.sample(clk - req->arrive, 1);
+              if (req->type == Request::Type::READ) {
+                read_wait_issue_time_sum += clk - req->arrive;
+                read_wait_issue_time_hist.sample(clk - req->arrive, 1);
+              } else {
+                write_wait_issue_time_sum += clk - req->arrive;
+                write_wait_issue_time_hist.sample(clk - req->arrive, 1);
+              }
               channel->update_serving_requests(req->addr_vec.data(), 1, clk);
             }
             int tx = (channel->spec->prefetch_size * channel->spec->channel_width / 8);

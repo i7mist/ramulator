@@ -135,6 +135,19 @@ void WideIO2::init_rowhit()
     rowhit[int(Level::Bank)][int(Command::WR)] = rowhit[int(Level::Bank)][int(Command::RD)];
 }
 
+void WideIO2::init_rowopen()
+{
+    // RD
+    rowopen[int(Level::Bank)][int(Command::RD)] = [] (DRAM<WideIO2>* node, Command cmd, int id) {
+        switch (int(node->state)) {
+            case int(State::Closed): return false;
+            case int(State::Opened): return true;
+            default: assert(false);
+        }};
+
+    // WR
+    rowopen[int(Level::Bank)][int(Command::WR)] = rowopen[int(Level::Bank)][int(Command::RD)];
+}
 
 void WideIO2::init_lambda()
 {

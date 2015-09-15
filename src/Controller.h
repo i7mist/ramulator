@@ -31,8 +31,10 @@ protected:
 
     ScalarStat read_row_hit;
     ScalarStat read_row_miss;
+    ScalarStat read_row_conflict;
     ScalarStat write_row_hit;
     ScalarStat write_row_miss;
+    ScalarStat write_row_conflict;
 
     ScalarStat memory_latency_sum;
     ScalarStat req_queue_length_sum;
@@ -105,6 +107,11 @@ public:
             .desc("Number of row misses for read request per channel")
             .precision(0)
             ;
+        read_row_conflict
+            .name("read_row_conflict_channel_"+to_string(channel->id))
+            .desc("Number of row conflicts for read request per channel")
+            .precision(0)
+            ;
 
         write_row_hit
             .name("write_row_hit_channel_"+to_string(channel->id))
@@ -114,6 +121,11 @@ public:
         write_row_miss
             .name("write_row_miss_channel_"+to_string(channel->id))
             .desc("Number of row misses for write request per channel")
+            .precision(0)
+            ;
+        write_row_conflict
+            .name("write_row_conflict_channel_"+to_string(channel->id))
+            .desc("Number of row conflicts for write request per channel")
             .precision(0)
             ;
 
@@ -271,15 +283,19 @@ public:
             if (req->type == Request::Type::READ) {
                 if (is_row_hit(req)) {
                     ++read_row_hit;
+                } else if (is_row_open(req)) {
+                    ++read_row_conflict;
                 } else {
                     ++read_row_miss;
                 }
               read_data_amount += tx;
             } else if (req->type == Request::Type::WRITE) {
               if (is_row_hit(req)) {
-                ++write_row_hit;
+                  ++write_row_hit;
+              } else if (is_row_open(req)) {
+                  ++write_row_conflict;
               } else {
-                ++write_row_miss;
+                  ++write_row_miss;
               }
               write_data_amount += tx;
             }
@@ -331,13 +347,26 @@ public:
 
     bool is_row_hit(list<Request>::iterator req)
     {
-        typename T::Command cmd = get_first_cmd(req);
+        // cmd must be decided by the request type, not the first cmd
+        typename T::Command cmd = channel->spec->translate[int(req->type)];
         return channel->check_row_hit(cmd, req->addr_vec.data());
     }
 
     bool is_row_hit(typename T::Command cmd, const vector<int>& addr_vec)
     {
         return channel->check_row_hit(cmd, addr_vec.data());
+    }
+
+    bool is_row_open(list<Request>::iterator req)
+    {
+        // cmd must be decided by the request type, not the first cmd
+        typename T::Command cmd = channel->spec->translate[int(req->type)];
+        return channel->check_row_open(cmd, req->addr_vec.data());
+    }
+
+    bool is_row_open(typename T::Command cmd, const vector<int>& addr_vec)
+    {
+        return channel->check_row_open(cmd, addr_vec.data());
     }
 
     void update_temp(ALDRAM::Temp current_temperature)

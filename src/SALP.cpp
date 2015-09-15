@@ -48,6 +48,7 @@ SALP::SALP(Org org, Speed speed, Type type, int n_sa) :
     init_speed();
     init_prereq();
     init_rowhit(); // SAUGATA: added row hit function
+    init_rowopen();
     init_lambda();
     init_timing();
 }
@@ -247,6 +248,46 @@ void SALP::init_rowhit()
     }
 }
 
+void SALP::init_rowopen()
+{
+    switch(int(type)) {
+        case int(Type::SALP_1):
+            // RD
+            rowopen[int(Level::Bank)][int(Command::RD)] = [] (DRAM<SALP>* node, Command cmd, int id) {
+                switch (int(node->state)){
+                    case int(State::Closed): return false;
+                    case int(State::Opened): return true;
+                    default: assert(false);
+                }};
+            // WR
+            rowopen[int(Level::Bank)][int(Command::WR)] = rowopen[int(Level::Bank)][int(Command::RD)];
+            break;
+        case int(Type::SALP_2):
+            // RD
+            rowopen[int(Level::SubArray)][int(Command::RD)] = [] (DRAM<SALP>* node, Command cmd, int id) {
+                switch (int(node->state)){
+                    case int(State::Closed): return false;
+                    case int(State::Opened): return true;
+                    default: assert(false);
+                }};
+            // WR
+            rowopen[int(Level::SubArray)][int(Command::WR)] = rowopen[int(Level::SubArray)][int(Command::RD)];
+            break;
+        case int(Type::MASA):
+            // RD
+            rowopen[int(Level::SubArray)][int(Command::RD)] = [] (DRAM<SALP>* node, Command cmd, int id) {
+                switch (int(node->state)){
+                    case int(State::Closed): return false;
+                    case int(State::Opened): return true;
+                    case int(State::Selected): return true;
+                    default: assert(false);
+                }};
+            // WR
+            rowopen[int(Level::SubArray)][int(Command::WR)] = rowopen[int(Level::SubArray)][int(Command::RD)];
+            break;
+        default: assert(false);
+    }
+}
 
 void SALP::init_lambda()
 {

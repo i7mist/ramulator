@@ -59,6 +59,9 @@ public:
     // Check whether a command is a row hit
     bool check_row_hit(typename T::Command cmd, const int* addr);
 
+    // Check whether a row is open
+    bool check_row_open(typename T::Command cmd, const int* addr);
+
     // Return the earliest clock when a command is ready to be scheduled
     long get_next(typename T::Command cmd, const int* addr);
 
@@ -98,6 +101,7 @@ private:
     // Lookup table for whether a command is a row hit
     // E.g., a read command to a closed bank must be preceded by an activate command
     function<bool(DRAM<T>*, typename T::Command cmd, int)>* rowhit;
+    function<bool(DRAM<T>*, typename T::Command cmd, int)>* rowopen;
 
     // Lookup table between commands and the state transitions they trigger
     // E.g., an activate command to a closed bank opens both the bank and the row
@@ -156,6 +160,7 @@ DRAM<T>::DRAM(T* spec, typename T::Level level) :
     state = spec->start[(int)level];
     prereq = spec->prereq[int(level)];
     rowhit = spec->rowhit[int(level)]; // SAUGATA: added row hit table
+    rowopen = spec->rowopen[int(level)]; // SAUGATA: added row hit table
     lambda = spec->lambda[int(level)];
     timing = spec->timing[int(level)];
 
@@ -253,6 +258,21 @@ bool DRAM<T>::check_row_hit(typename T::Command cmd, const int* addr)
 
     // recursively check for row hits at my child
     return children[child_id]->check_row_hit(cmd, addr);
+}
+
+template <typename T>
+bool DRAM<T>::check_row_open(typename T::Command cmd, const int* addr)
+{
+    int child_id = addr[int(level)+1];
+    if (rowopen[int(cmd)]) {
+        return rowopen[int(cmd)](this, cmd, child_id);  // stop recursion: there is a row hit at this level
+    }
+
+    if (child_id < 0 || !children.size())
+        return false; // stop recursion: there were no row hits at any level
+
+    // recursively check for row hits at my child
+    return children[child_id]->check_row_open(cmd, addr);
 }
 
 template <typename T>

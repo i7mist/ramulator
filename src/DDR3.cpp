@@ -27,20 +27,21 @@ map<string, enum DDR3::Speed> DDR3::speed_map = {
 };
 
 
-DDR3::DDR3(Org org, Speed speed) : 
-    org_entry(org_table[int(org)]), 
+DDR3::DDR3(Org org, Speed speed) :
+    org_entry(org_table[int(org)]),
     speed_entry(speed_table[int(speed)]),
     read_latency(speed_entry.nCL + speed_entry.nBL)
 {
     init_speed();
     init_prereq();
     init_rowhit(); // SAUGATA: added row hit function
+    init_rowopen();
     init_lambda();
     init_timing();
 }
 
 DDR3::DDR3(const string& org_str, const string& speed_str) :
-    DDR3(org_map[org_str], speed_map[speed_str]) 
+    DDR3(org_map[org_str], speed_map[speed_str])
 {
 }
 
@@ -98,7 +99,7 @@ void DDR3::init_prereq()
             case int(State::ActPowerDown): return Command::PDX;
             case int(State::PrePowerDown): return Command::PDX;
             case int(State::SelfRefresh): return Command::SRX;
-            default: assert(false); 
+            default: assert(false);
         }};
     prereq[int(Level::Bank)][int(Command::RD)] = [] (DRAM<DDR3>* node, Command cmd, int id) {
         switch (int(node->state)) {
@@ -163,6 +164,20 @@ void DDR3::init_rowhit()
     rowhit[int(Level::Bank)][int(Command::WR)] = rowhit[int(Level::Bank)][int(Command::RD)];
 }
 
+void DDR3::init_rowopen()
+{
+    // RD
+    rowopen[int(Level::Bank)][int(Command::RD)] = [] (DRAM<DDR3>* node, Command cmd, int id) {
+        switch (int(node->state)) {
+            case int(State::Closed): return false;
+            case int(State::Opened): return true;
+            default: assert(false);
+        }};
+
+    // WR
+    rowopen[int(Level::Bank)][int(Command::WR)] = rowopen[int(Level::Bank)][int(Command::RD)];
+}
+
 void DDR3::init_lambda()
 {
     lambda[int(Level::Bank)][int(Command::ACT)] = [] (DRAM<DDR3>* node, int id) {
@@ -206,7 +221,7 @@ void DDR3::init_timing()
     SpeedEntry& s = speed_entry;
     vector<TimingEntry> *t;
 
-    /*** Channel ***/ 
+    /*** Channel ***/
     t = timing[int(Level::Channel)];
 
     // CAS <-> CAS
@@ -220,7 +235,7 @@ void DDR3::init_timing()
     t[int(Command::WRA)].push_back({Command::WRA, 1, s.nBL});
 
 
-    /*** Rank ***/ 
+    /*** Rank ***/
     t = timing[int(Level::Rank)];
 
     // CAS <-> CAS
@@ -271,7 +286,7 @@ void DDR3::init_timing()
     t[int(Command::PDX)].push_back({Command::RDA, 1, s.nXP});
     t[int(Command::PDX)].push_back({Command::WR, 1, s.nXP});
     t[int(Command::PDX)].push_back({Command::WRA, 1, s.nXP});
-    
+
     // CAS <-> SR: none (all banks have to be precharged)
 
     // RAS <-> RAS
@@ -305,7 +320,7 @@ void DDR3::init_timing()
 
     // REF <-> SR
     t[int(Command::SRX)].push_back({Command::REF, 1, s.nXS});
-    
+
     // PD <-> PD
     t[int(Command::PDE)].push_back({Command::PDX, 1, s.nPD});
     t[int(Command::PDX)].push_back({Command::PDE, 1, s.nXP});
@@ -313,13 +328,13 @@ void DDR3::init_timing()
     // PD <-> SR
     t[int(Command::PDX)].push_back({Command::SRE, 1, s.nXP});
     t[int(Command::SRX)].push_back({Command::PDE, 1, s.nXS});
-    
+
     // SR <-> SR
     t[int(Command::SRE)].push_back({Command::SRX, 1, s.nCKESR});
     t[int(Command::SRX)].push_back({Command::SRE, 1, s.nXS});
 
 
-    /*** Bank ***/ 
+    /*** Bank ***/
     t = timing[int(Level::Bank)];
 
     // CAS <-> RAS

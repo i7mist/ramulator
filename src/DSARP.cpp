@@ -41,6 +41,7 @@ DSARP::DSARP(Org org, Speed speed, Type type, int n_sa) :
   init_speed();
   init_prereq();
   init_rowhit(); // SAUGATA: added row hit function
+  init_rowopen();
   init_lambda();
   init_timing();
 
@@ -212,6 +213,19 @@ void DSARP::init_rowhit()
       }};
   // WR
   rowhit[int(Level::SubArray)][int(Command::WR)] = rowhit[int(Level::SubArray)][int(Command::RD)];
+}
+
+void DSARP::init_rowopen()
+{
+  // RD
+  rowopen[int(Level::SubArray)][int(Command::RD)] = [] (DRAM<DSARP>* node, Command cmd, int id) {
+      switch (int(node->state)){
+          case int(State::Closed): return false;
+          case int(State::Opened): return true;
+          default: assert(false);
+      }};
+  // WR
+  rowopen[int(Level::SubArray)][int(Command::WR)] = rowopen[int(Level::SubArray)][int(Command::RD)];
 }
 
 void DSARP::init_lambda()

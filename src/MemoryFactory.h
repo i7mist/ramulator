@@ -8,10 +8,35 @@
 #include "Config.h"
 #include "Memory.h"
 
+#include "GDDR5.h"
+#include "HBM.h"
+#include "LPDDR3.h"
+#include "LPDDR4.h"
+#include "WideIO2.h"
+#include "DSARP.h"
+
 using namespace std;
 
 namespace ramulator
 {
+
+template <>
+void DRAM<GDDR5>::regSpecStats();
+
+template <>
+void DRAM<HBM>::regSpecStats();
+
+template <>
+void DRAM<LPDDR3>::regSpecStats();
+
+template <>
+void DRAM<LPDDR4>::regSpecStats();
+
+template <>
+void DRAM<WideIO2>::regSpecStats();
+
+template <>
+void DRAM<DSARP>::regSpecStats();
 
 template <typename T>
 class MemoryFactory {
@@ -45,6 +70,7 @@ public:
             channel->regStats("");
             ctrls.push_back(new Controller<T>(configs, channel));
         }
+        ctrls[0]->channel->DRAM<T>::regSpecStats();
         return new Memory<T>(configs, ctrls);
     }
 

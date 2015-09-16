@@ -39,6 +39,7 @@
 #include <functional>
 #include "DRAM.h"
 #include "Request.h"
+#include "Statistics.h"
 
 using namespace std;
 
@@ -48,6 +49,15 @@ namespace ramulator
 class DSARP
 {
 public:
+    ScalarStat tCK;
+    ScalarStat nRCDR;
+    ScalarStat nRCDW;
+    ScalarStat nRP;
+    ScalarStat nBL;
+    ScalarStat nCL;
+    ScalarStat read_latency_stat;
+    ScalarStat frequency;
+
     static string standard_name;
     enum class Org;
     enum class Speed;

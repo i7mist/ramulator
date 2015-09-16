@@ -3,6 +3,7 @@
 
 #include "DRAM.h"
 #include "Request.h"
+#include "Statistics.h"
 #include <vector>
 #include <functional>
 
@@ -14,6 +15,15 @@ namespace ramulator
 class WideIO2
 {
 public:
+    ScalarStat tCK;
+    ScalarStat nRCDR;
+    ScalarStat nRCDW;
+    ScalarStat nRP;
+    ScalarStat nBL;
+    ScalarStat nCL;
+    ScalarStat read_latency_stat;
+    ScalarStat frequency;
+
     static string standard_name;
     enum class Org;
     enum class Speed;

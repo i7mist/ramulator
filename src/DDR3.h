@@ -3,6 +3,7 @@
 
 #include "DRAM.h"
 #include "Request.h"
+#include "Statistics.h"
 #include <vector>
 #include <map>
 #include <string>
@@ -16,6 +17,15 @@ namespace ramulator
 class DDR3
 {
 public:
+    ScalarStat tCK;
+    ScalarStat nRCDR;
+    ScalarStat nRCDW;
+    ScalarStat nRP;
+    ScalarStat nBL;
+    ScalarStat nCL;
+    ScalarStat read_latency_stat;
+    ScalarStat frequency;
+
     static string standard_name;
     enum class Org;
     enum class Speed;

@@ -81,6 +81,64 @@ public:
     long end_of_refreshing = -1;
     std::vector<std::pair<long, long>> refresh_intervals;
 
+    // register memory specification statistics
+    void regSpecStats() {
+        spec->tCK
+          .name("tCK")
+          .desc("tCK(ns)")
+          .precision(6)
+          ;
+        spec->tCK = spec->speed_entry.tCK;
+
+        spec->nRCDR
+          .name("nRCDR")
+          .desc("nRCDR(cycle)")
+          .precision(6)
+          ;
+        spec->nRCDR = spec->speed_entry.nRCD;
+
+        spec->nRCDW
+          .name("nRCDW")
+          .desc("nRCDW(cycle)")
+          .precision(6)
+          ;
+        spec->nRCDW = spec->speed_entry.nRCD;
+
+        spec->nRP
+          .name("nRP")
+          .desc("nRP(cycle)")
+          .precision(6)
+          ;
+        spec->nRP = spec->speed_entry.nRP;
+
+        spec->nBL
+          .name("nBL")
+          .desc("nBL(cycle)")
+          .precision(6)
+          ;
+        spec->nBL = spec->speed_entry.nBL;
+
+        spec->nCL
+          .name("nCL")
+          .desc("nCL(cycle)")
+          .precision(6)
+          ;
+        spec->nCL = spec->speed_entry.nCL;
+
+        spec->read_latency_stat
+          .name("read_latency")
+          .desc("read_latency (ns)")
+          .precision(6)
+          ;
+        spec->read_latency_stat = spec->read_latency;
+
+        spec->frequency
+          .name("frequency")
+          .desc("memory frequency (MHz)")
+          .precision(6)
+          ;
+        spec->frequency = spec->speed_entry.freq;
+    }
     // register statistics
     void regStats(const std::string& identifier);
 
@@ -116,10 +174,10 @@ private:
     void update_timing(typename T::Command cmd, const int* addr, long clk);
 }; /* class DRAM */
 
+
 // register statistics
 template <typename T>
 void DRAM<T>::regStats(const std::string& identifier) {
-
     total_active_cycles
         .name("total_active_cycles" + identifier + "_" + to_string(id))
         .desc("Total active cycles_for_level_" + identifier + "_" + to_string(id))

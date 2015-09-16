@@ -6,6 +6,12 @@
 #include "Request.h"
 #include "Controller.h"
 #include "Statistics.h"
+#include "GDDR5.h"
+#include "HBM.h"
+#include "LPDDR3.h"
+#include "LPDDR4.h"
+#include "WideIO2.h"
+#include "DSARP.h"
 #include <vector>
 #include <functional>
 #include <cmath>
@@ -17,6 +23,25 @@ using namespace std;
 namespace ramulator
 {
 
+template <>
+void DRAM<GDDR5>::regSpecStats();
+
+template <>
+void DRAM<HBM>::regSpecStats();
+
+template <>
+void DRAM<LPDDR3>::regSpecStats();
+
+template <>
+void DRAM<LPDDR4>::regSpecStats();
+
+template <>
+void DRAM<WideIO2>::regSpecStats();
+
+template <>
+void DRAM<DSARP>::regSpecStats();
+
+
 class MemoryBase{
 public:
     MemoryBase() {}
@@ -25,6 +50,7 @@ public:
     virtual void tick() = 0;
     virtual bool send(Request req) = 0;
     virtual int pending_requests() = 0;
+    virtual void finish(void) = 0;
 };
 
 template <class T, template<typename> class Controller = Controller >
@@ -178,7 +204,6 @@ public:
             .desc("The theoretical maximum bandwidth (Bps)")
             .precision(0)
             ;
-        maximum_bandwidth = spec->speed_entry.rate * 1e6 * spec->channel_width * sz[int(T::Level::Channel)] / 8;
         in_DRAM_req_num_hist
             .init(20)
             .name("in_DRAM_req_num_hist")
@@ -371,6 +396,13 @@ public:
         for (auto ctrl: ctrls)
             reqs += ctrl->readq.size() + ctrl->writeq.size() + ctrl->otherq.size() + ctrl->pending.size();
         return reqs;
+    }
+
+    void finish(void) {
+      dram_capacity = max_address;
+      ctrls[0]->channel->DRAM<T>::regSpecStats();
+      int *sz = spec->org_entry.count;
+      maximum_bandwidth = spec->speed_entry.rate * 1e6 * spec->channel_width * sz[int(T::Level::Channel)] / 8;
     }
 
 private:

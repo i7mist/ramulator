@@ -51,3 +51,7 @@ bool Gem5Wrapper::send(Request req)
 {
     return mem->send(req);
 }
+
+void Gem5Wrapper::finish(void) {
+    mem->finish();
+}

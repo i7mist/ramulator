@@ -64,6 +64,8 @@ void run_dramtrace(const Config& configs, Memory<T, Controller>& memory, const c
         clks ++;
         Stats::curTick++; // memory clock, global, for Statistics
     }
+    // This a workaround for statistics set only initially lost in the end
+    memory.finish();
     Stats::statlist.printall();
 
 }
@@ -89,26 +91,10 @@ void run_cputrace(const Config& configs, Memory<T, Controller>& memory, const st
             break;
       }
     }
+    // This a workaround for statistics set only initially lost in the end
+    memory.finish();
     Stats::statlist.printall();
 }
-
-template <>
-void DRAM<GDDR5>::regSpecStats();
-
-template <>
-void DRAM<HBM>::regSpecStats();
-
-template <>
-void DRAM<LPDDR3>::regSpecStats();
-
-template <>
-void DRAM<LPDDR4>::regSpecStats();
-
-template <>
-void DRAM<WideIO2>::regSpecStats();
-
-template <>
-void DRAM<DSARP>::regSpecStats();
 
 template<typename T>
 void start_run(const Config& configs, T* spec, const vector<const char*>& files) {
@@ -126,7 +112,6 @@ void start_run(const Config& configs, T* spec, const vector<const char*>& files)
     ctrls.push_back(ctrl);
   }
   Memory<T, Controller> memory(configs, ctrls);
-  ctrls[0]->channel->regSpecStats();
 
   assert(files.size() != 0);
   if (configs["trace_type"] == "CPU") {

@@ -97,9 +97,9 @@ public:
       {"Random", Translation::Random},
     };
 
-    vector<bool> free_physical_pages;
+    vector<int> free_physical_pages;
     long free_physical_pages_remaining;
-    map<long, long> page_translation;
+    map<pair<int, long>, long> page_translation;
 
     vector<Controller<T>*> ctrls;
     T * spec;
@@ -144,7 +144,7 @@ public:
           // TODO: this should not assume a 4KB page!
           free_physical_pages_remaining = max_address >> 12;
 
-          free_physical_pages.resize(free_physical_pages_remaining, true);
+          free_physical_pages.resize(free_physical_pages_remaining, -1);
         }
 
         dram_capacity
@@ -307,13 +307,15 @@ public:
         long addr;
 
         long virtual_page_number = req.addr >> 12;
+        int coreid = req.coreid;
 
         switch(int(translation)) {
             case int(Translation::None):
                 addr = req.addr;
                 break;
-            case int(Translation::Random):
-                if(page_translation.find(virtual_page_number) == page_translation.end()) {
+            case int(Translation::Random): {
+                auto target = make_pair(coreid, virtual_page_number);
+                if(page_translation.find(target) == page_translation.end()) {
                     // page doesn't exist, so assign a new page
                     // make sure there are physical pages left to be assigned
 
@@ -322,13 +324,13 @@ public:
                     if (!free_physical_pages_remaining) {
                       physical_page_replacement++;
                       long phys_page_to_read = lrand() % free_physical_pages.size();
-                      assert(!free_physical_pages[phys_page_to_read]);
-                      page_translation[virtual_page_number] = phys_page_to_read;
+                      assert(free_physical_pages[phys_page_to_read] != -1);
+                      page_translation[target] = phys_page_to_read;
                     } else {
                         // assign a new page
                         long phys_page_to_read = lrand() % free_physical_pages.size();
                         // if the randomly-selected page was already assigned
-                        if(!free_physical_pages[phys_page_to_read]) {
+                        if(free_physical_pages[phys_page_to_read] != -1) {
                             long starting_page_of_search = phys_page_to_read;
 
                             do {
@@ -337,21 +339,22 @@ public:
                                 ++phys_page_to_read;
                                 phys_page_to_read %= free_physical_pages.size();
                             }
-                            while((phys_page_to_read != starting_page_of_search) && !free_physical_pages[phys_page_to_read]);
+                            while((phys_page_to_read != starting_page_of_search) && free_physical_pages[phys_page_to_read] != -1);
                         }
 
-                        assert(free_physical_pages[phys_page_to_read]);
+                        assert(free_physical_pages[phys_page_to_read] == -1);
 
-                        page_translation[virtual_page_number] = phys_page_to_read;
-                        free_physical_pages[phys_page_to_read] = false;
+                        page_translation[target] = phys_page_to_read;
+                        free_physical_pages[phys_page_to_read] = coreid;
                         --free_physical_pages_remaining;
                     }
                 }
 
                 // SAUGATA TODO: page size should not always be fixed to 4KB
-                addr = page_translation[virtual_page_number] << 12;
+                addr = page_translation[target] << 12;
                 addr |= (req.addr & ((1 << 12) - 1));
                 break;
+            }
             default:
                 assert(false);
         }

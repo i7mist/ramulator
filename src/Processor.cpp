@@ -176,7 +176,7 @@ void Core::tick()
         if (inserted == window.ipc) return;
         if (window.is_full()) return;
 
-        Request req(req_addr, req_type, callback);
+        Request req(req_addr, req_type, callback, id);
         if (!send(req)) return;
 
         window.insert(false, req_addr);
@@ -185,7 +185,7 @@ void Core::tick()
     else {
         // write request
         assert(req_type == Request::Type::WRITE);
-        Request req(req_addr, req_type, callback);
+        Request req(req_addr, req_type, callback, id);
         if (!send(req)) return;
         cpu_inst++;
     }

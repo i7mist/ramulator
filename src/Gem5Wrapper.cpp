@@ -17,6 +17,11 @@
 
 using namespace ramulator;
 
+template <>
+MemoryBase *MemoryFactory<WideIO2>::create(const Config& configs, int cacheline);
+template <>
+MemoryBase *MemoryFactory<SALP>::create(const Config& configs, int cacheline);
+
 static map<string, function<MemoryBase *(const Config&, int)> > name_to_func = {
     {"DDR3", &MemoryFactory<DDR3>::create}, {"DDR4", &MemoryFactory<DDR4>::create},
     {"LPDDR3", &MemoryFactory<LPDDR3>::create}, {"LPDDR4", &MemoryFactory<LPDDR4>::create},

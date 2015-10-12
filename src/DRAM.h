@@ -130,7 +130,7 @@ public:
           .desc("read_latency (ns)")
           .precision(6)
           ;
-        spec->read_latency_stat = spec->read_latency;
+        spec->read_latency_stat = spec->read_latency * spec->tCK.value();
 
         spec->frequency
           .name("frequency")

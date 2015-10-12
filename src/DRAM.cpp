@@ -53,11 +53,11 @@ void DRAM<GDDR5>::regSpecStats() {
     spec->nCL = spec->speed_entry.nCL;
 
     spec->read_latency_stat
-      .name("read_latency_stat")
-      .desc("read_latency_stat (ns)")
+      .name("read_latency")
+      .desc("read_latency (ns)")
       .precision(6)
       ;
-    spec->read_latency_stat = spec->read_latency_stat;
+    spec->read_latency_stat = spec->read_latency * spec->tCK.value();
 
     spec->frequency
       .name("frequency")
@@ -112,11 +112,11 @@ void DRAM<HBM>::regSpecStats() {
     spec->nCL = spec->speed_entry.nCL;
 
     spec->read_latency_stat
-      .name("read_latency_stat")
-      .desc("read_latency_stat (ns)")
+      .name("read_latency")
+      .desc("read_latency (ns)")
       .precision(6)
       ;
-    spec->read_latency_stat = spec->read_latency_stat;
+    spec->read_latency_stat = spec->read_latency * spec->tCK.value();
 
     spec->frequency
       .name("frequency")
@@ -171,11 +171,11 @@ void DRAM<LPDDR3>::regSpecStats() {
     spec->nCL = spec->speed_entry.nCL;
 
     spec->read_latency_stat
-      .name("read_latency_stat")
-      .desc("read_latency_stat (ns)")
+      .name("read_latency")
+      .desc("read_latency (ns)")
       .precision(6)
       ;
-    spec->read_latency_stat = spec->read_latency_stat;
+    spec->read_latency_stat = spec->read_latency * spec->tCK.value();
 
     spec->frequency
       .name("frequency")
@@ -230,11 +230,11 @@ void DRAM<LPDDR4>::regSpecStats() {
     spec->nCL = spec->speed_entry.nCL;
 
     spec->read_latency_stat
-      .name("read_latency_stat")
-      .desc("read_latency_stat (ns)")
+      .name("read_latency")
+      .desc("read_latency (ns)")
       .precision(6)
       ;
-    spec->read_latency_stat = spec->read_latency_stat;
+    spec->read_latency_stat = spec->read_latency * spec->tCK.value();
 
     spec->frequency
       .name("frequency")
@@ -289,11 +289,11 @@ void DRAM<DSARP>::regSpecStats() {
     spec->nCL = spec->speed_entry.nCL;
 
     spec->read_latency_stat
-      .name("read_latency_stat")
-      .desc("read_latency_stat (ns)")
+      .name("read_latency")
+      .desc("read_latency (ns)")
       .precision(6)
       ;
-    spec->read_latency_stat = spec->read_latency_stat;
+    spec->read_latency_stat = spec->read_latency * spec->tCK.value();
 
     spec->frequency
       .name("frequency")
@@ -348,11 +348,11 @@ void DRAM<ramulator::WideIO2>::regSpecStats() {
     spec->nCL = spec->speed_entry.nCL;
 
     spec->read_latency_stat
-      .name("read_latency_stat")
-      .desc("read_latency_stat (ns)")
+      .name("read_latency")
+      .desc("read_latency (ns)")
       .precision(6)
       ;
-    spec->read_latency_stat = spec->read_latency_stat;
+    spec->read_latency_stat = spec->read_latency * spec->tCK.value();
 
     spec->frequency
       .name("frequency")

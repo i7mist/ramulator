@@ -17,11 +17,6 @@
 
 using namespace ramulator;
 
-template <>
-MemoryBase *MemoryFactory<WideIO2>::create(const Config& configs, int cacheline);
-template <>
-MemoryBase *MemoryFactory<SALP>::create(const Config& configs, int cacheline);
-
 static map<string, function<MemoryBase *(const Config&, int)> > name_to_func = {
     {"DDR3", &MemoryFactory<DDR3>::create}, {"DDR4", &MemoryFactory<DDR4>::create},
     {"LPDDR3", &MemoryFactory<LPDDR3>::create}, {"LPDDR4", &MemoryFactory<LPDDR4>::create},
@@ -32,10 +27,11 @@ static map<string, function<MemoryBase *(const Config&, int)> > name_to_func = {
 };
 
 
-Gem5Wrapper::Gem5Wrapper(const string& config_file, int cacheline)
+Gem5Wrapper::Gem5Wrapper(const string& config_file, const string& mem_trace_file, int cacheline)
 {
     Config cfg;
     cfg.parse(config_file);
+    cfg.add("cmd_trace_prefix", mem_trace_file);
     const string& std_name = cfg["standard"];
     assert(name_to_func.find(std_name) != name_to_func.end() && "unrecognized standard name");
     mem = name_to_func[std_name](cfg, cacheline);

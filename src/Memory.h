@@ -288,8 +288,8 @@ public:
         int cur_que_writereq_num = 0;
         for (auto ctrl : ctrls) {
           cur_req_num += ctrl->channel->cur_serving_requests;
-          cur_que_req_num += ctrl->readq.size() + ctrl->writeq.size();
-          cur_que_readreq_num += ctrl->readq.size();
+          cur_que_req_num += ctrl->readq.size() + ctrl->writeq.size() + ctrl->pending.size();
+          cur_que_readreq_num += ctrl->readq.size() + ctrl->pending.size();
           cur_que_writereq_num += ctrl->writeq.size();
         }
         in_DRAM_req_num_hist.sample(cur_req_num, 1);

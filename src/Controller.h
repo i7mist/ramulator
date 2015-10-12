@@ -26,8 +26,8 @@ class Controller
 {
 protected:
     // For counting bandwidth
-    ScalarStat read_data_amount;
-    ScalarStat write_data_amount;
+    ScalarStat read_transaction_bytes;
+    ScalarStat write_transaction_bytes;
 
     ScalarStat read_row_hit;
     ScalarStat read_row_miss;
@@ -137,14 +137,14 @@ public:
             .precision(0)
             ;
 
-        read_data_amount
-            .name("read_data_amount_"+to_string(channel->id))
-            .desc("The total read data amount per channel")
+        read_transaction_bytes
+            .name("read_transaction_bytes_"+to_string(channel->id))
+            .desc("The total read transaction bytes per channel")
             .precision(0)
             ;
-        write_data_amount
-            .name("write_data_amount_"+to_string(channel->id))
-            .desc("The total write data amount per channel")
+        write_transaction_bytes
+            .name("write_transaction_bytes_"+to_string(channel->id))
+            .desc("The total write data bytes per channel")
             .precision(0)
             ;
 
@@ -274,8 +274,8 @@ public:
     void tick()
     {
         clk++;
-        req_queue_length_sum += readq.size() + writeq.size();
-        read_req_queue_length_sum += readq.size();
+        req_queue_length_sum += readq.size() + writeq.size() + pending.size();
+        read_req_queue_length_sum += readq.size() + pending.size();
         write_req_queue_length_sum += writeq.size();
 
         /*** 1. Serve completed reads ***/
@@ -348,7 +348,7 @@ public:
                 } else {
                     ++read_row_miss;
                 }
-              read_data_amount += tx;
+              read_transaction_bytes += tx;
             } else if (req->type == Request::Type::WRITE) {
               if (is_row_hit(req)) {
                   ++write_row_hit;
@@ -357,7 +357,7 @@ public:
               } else {
                   ++write_row_miss;
               }
-              write_data_amount += tx;
+              write_transaction_bytes += tx;
             }
         }
 

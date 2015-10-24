@@ -406,6 +406,9 @@ public:
       ctrls[0]->channel->DRAM<T>::regSpecStats();
       int *sz = spec->org_entry.count;
       maximum_bandwidth = spec->speed_entry.rate * 1e6 * spec->channel_width * sz[int(T::Level::Channel)] / 8;
+      for (auto ctrl : ctrls) {
+        ctrl->finish();
+      }
     }
 
 private:

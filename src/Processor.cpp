@@ -25,19 +25,19 @@ Processor::Processor(const Config& configs,
   }
   if (no_shared_cache) {
     for (int i = 0 ; i < tracenum ; ++i) {
-      cores.emplace_back(
+      cores.emplace_back(new Core(
           configs, i, trace_list[i], send_memory, nullptr,
-          cachesys);
+          cachesys));
     }
   } else {
     for (int i = 0 ; i < tracenum ; ++i) {
-      cores.emplace_back(configs, i, trace_list[i],
+      cores.emplace_back(new Core(configs, i, trace_list[i],
           std::bind(&Cache::send, &llc, std::placeholders::_1),
-          &llc, cachesys);
+          &llc, cachesys));
     }
   }
   for (int i = 0 ; i < tracenum ; ++i) {
-    cores[i].callback = std::bind(&Processor::receive, this,
+    cores[i]->callback = std::bind(&Processor::receive, this,
         placeholders::_1);
   }
 
@@ -54,32 +54,35 @@ void Processor::tick() {
   if (!(no_core_caches && no_shared_cache)) {
     cachesys->tick();
   }
-  for (auto& core : cores) {
-    core.tick();
+  for (unsigned int i = 0 ; i < cores.size() ; ++i) {
+    Core* core = cores[i].get();
+    core->tick();
   }
 }
 
 void Processor::receive(Request& req) {
   if (!no_shared_cache) {
     llc.callback(req);
-  } else if (!cores[0].no_core_caches) {
+  } else if (!cores[0]->no_core_caches) {
     // Assume all cores have caches or don't have caches
     // at the same time.
-    for (auto& core : cores) {
-      core.caches[0]->callback(req);
+    for (unsigned int i = 0 ; i < cores.size() ; ++i) {
+      Core* core = cores[i].get();
+      core->caches[0]->callback(req);
     }
   }
-  for (auto& core : cores) {
-    core.receive(req);
+  for (unsigned int i = 0 ; i < cores.size() ; ++i) {
+    Core* core = cores[i].get();
+    core->receive(req);
   }
 }
 
 bool Processor::finished() {
   if (early_exit) {
     for (unsigned int i = 0 ; i < cores.size(); ++i) {
-      if (cores[i].finished()) {
+      if (cores[i]->finished()) {
         for (unsigned int j = 0 ; j < cores.size() ; ++j) {
-          ipc += cores[j].calc_ipc();
+          ipc += cores[j]->calc_ipc();
         }
         return true;
       }
@@ -87,16 +90,25 @@ bool Processor::finished() {
     return false;
   } else {
     for (unsigned int i = 0 ; i < cores.size(); ++i) {
-      if (!cores[i].finished()) {
+      if (!cores[i]->finished()) {
         return false;
       }
       if (ipcs[i] < 0) {
-        ipcs[i] = cores[i].calc_ipc();
+        ipcs[i] = cores[i]->calc_ipc();
         ipc += ipcs[i];
       }
     }
     return true;
   }
+}
+
+bool Processor::has_reached_limit() {
+  for (unsigned int i = 0 ; i < cores.size() ; ++i) {
+    if (!cores[i]->has_reached_limit()) {
+      return false;
+    }
+  }
+  return true;
 }
 
 Core::Core(const Config& configs, int coreid,
@@ -132,13 +144,26 @@ Core::Core(const Config& configs, int coreid,
         bubble_cnt, req_addr, req_type);
   }
 
+  // set expected limit instruction for calculating weighted speedup
+  expected_limit_insts = configs.get_expected_limit_insts();
+
   // regStats
-  memory_access_cycles.name("memory_access_cycles")
+  record_cycs.name("record_cycs_core_" + to_string(id))
+             .desc("Record cycle number for calculating weighted speedup. (Only valid when expected limit instruction number is non zero in config file.)")
+             .precision(0)
+             ;
+
+  record_insts.name("record_insts_core_" + to_string(id))
+              .desc("Retired instruction number when record cycle number. (Only valid when expected limit instruction number is non zero in config file.)")
+              .precision(0)
+              ;
+
+  memory_access_cycles.name("memory_access_cycles_core_" + to_string(id))
                       .desc("memory access cycles in memory time domain")
                       .precision(0)
                       ;
   memory_access_cycles = 0;
-  cpu_inst.name("cpu_instructions")
+  cpu_inst.name("cpu_instructions_core_" + to_string(id))
           .desc("cpu instruction number")
           .precision(0)
           ;
@@ -158,7 +183,8 @@ void Core::tick()
 
     retired += window.retire();
 
-    if (!more_reqs) return;
+    if (expected_limit_insts == 0 && !more_reqs) return;
+
     // bubbles (non-memory operations)
     int inserted = 0;
     while (bubble_cnt > 0) {
@@ -169,6 +195,11 @@ void Core::tick()
         inserted++;
         bubble_cnt--;
         cpu_inst++;
+        if (long(cpu_inst.value()) == expected_limit_insts && !reached_limit) {
+          record_cycs = clk;
+          record_insts = long(cpu_inst.value());
+          reached_limit = true;
+        }
     }
 
     if (req_type == Request::Type::READ) {
@@ -189,6 +220,11 @@ void Core::tick()
         if (!send(req)) return;
         cpu_inst++;
     }
+    if (long(cpu_inst.value()) == expected_limit_insts && !reached_limit) {
+      record_cycs = clk;
+      record_insts = long(cpu_inst.value());
+      reached_limit = true;
+    }
 
     if (no_core_caches) {
       more_reqs = trace.get_filtered_request(
@@ -197,12 +233,24 @@ void Core::tick()
       more_reqs = trace.get_unfiltered_request(
           bubble_cnt, req_addr, req_type);
     }
+    if (!more_reqs) {
+      if (!reached_limit) { // if the length of this trace is shorter than expected length, then record it when the whole trace finishes, and set reached_limit to true.
+        record_cycs = clk;
+        record_insts = long(cpu_inst.value());
+        reached_limit = true;
+      }
+    }
 }
 
 bool Core::finished()
 {
     return !more_reqs && window.is_empty();
 }
+
+bool Core::has_reached_limit() {
+  return reached_limit;
+}
+
 void Core::receive(Request& req)
 {
     window.set_ready(req.addr, ~(l1_blocksz - 1l));
@@ -269,7 +317,7 @@ void Window::set_ready(long addr, int mask)
 
 
 
-Trace::Trace(const char* trace_fname) : file(trace_fname)
+Trace::Trace(const char* trace_fname) : file(trace_fname), trace_name(trace_fname)
 {
     if (!file.good()) {
         std::cerr << "Bad trace file: " << trace_fname << std::endl;
@@ -282,7 +330,9 @@ bool Trace::get_unfiltered_request(long& bubble_cnt, long& req_addr, Request::Ty
     string line;
     getline(file, line);
     if (file.eof()) {
-        return false;
+      file.clear();
+      file.seekg(0, file.beg);
+      return false;
     }
     size_t pos, end;
     bubble_cnt = std::stoul(line, &pos, 10);
@@ -316,7 +366,8 @@ bool Trace::get_filtered_request(long& bubble_cnt, long& req_addr, Request::Type
     line_num ++;
     if (file.eof() || line.size() == 0) {
         file.clear();
-        file.seekg(0);
+        file.seekg(0, file.beg);
+        has_write = false;
         line_num = 0;
         return false;
     }

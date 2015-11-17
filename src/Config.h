@@ -20,6 +20,7 @@ private:
     int subarrays;
     int cpu_tick;
     int mem_tick;
+    long expected_limit_insts = 0;
 
 public:
     Config() {}
@@ -54,6 +55,7 @@ public:
     int get_ranks() const {return ranks;}
     int get_cpu_tick() const {return cpu_tick;}
     int get_mem_tick() const {return mem_tick;}
+    long get_expected_limit_insts() const {return expected_limit_insts;}
     bool has_l3_cache() const {
       if (options.find("cache") != options.end()) {
         const std::string& cache_option = (options.find("cache"))->second;
@@ -79,6 +81,9 @@ public:
         return true;
       }
       return true;
+    }
+    bool calc_weighted_speedup() const {
+      return (expected_limit_insts != 0);
     }
     bool record_cmd_trace() const {
       // the default value is false

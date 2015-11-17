@@ -28,6 +28,7 @@ public:
 
 private:
     std::ifstream file;
+    std::string trace_name;
 };
 
 
@@ -67,6 +68,7 @@ public:
     void receive(Request& req);
     double calc_ipc();
     bool finished();
+    bool has_reached_limit();
     function<void(Request&)> callback;
 
     bool no_core_caches = true;
@@ -83,6 +85,12 @@ public:
     std::vector<std::shared_ptr<Cache>> caches;
     Cache* llc;
 
+    ScalarStat record_cycs;
+    ScalarStat record_insts;
+    long expected_limit_insts;
+    // This is set true iff expected number of instructions has been executed or all instructions are executed.
+    bool reached_limit = false;;
+
 private:
     Trace trace;
     Window window;
@@ -91,10 +99,10 @@ private:
     long req_addr;
     Request::Type req_type;
     bool more_reqs;
+    long last = 0;
 
     ScalarStat memory_access_cycles;
     ScalarStat cpu_inst;
-    long last = 0;
 };
 
 class Processor {
@@ -104,8 +112,9 @@ public:
     void tick();
     void receive(Request& req);
     bool finished();
+    bool has_reached_limit();
 
-    std::vector<Core> cores;
+    std::vector<std::unique_ptr<Core>> cores;
     std::vector<double> ipcs;
     double ipc = 0;
 

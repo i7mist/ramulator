@@ -83,12 +83,18 @@ void run_cputrace(const Config& configs, Memory<T, Controller>& memory, const st
         if (i % cpu_tick == (cpu_tick - 1))
             for (int j = 0; j < mem_tick; j++)
                 memory.tick();
-      if (configs.is_early_exit()) {
-        if (proc.finished())
-            break;
+      if (configs.calc_weighted_speedup()) {
+        if (proc.has_reached_limit()) {
+          break;
+        }
       } else {
-        if (proc.finished() && (memory.pending_requests() == 0))
-            break;
+        if (configs.is_early_exit()) {
+          if (proc.finished())
+              break;
+        } else {
+          if (proc.finished() && (memory.pending_requests() == 0))
+              break;
+        }
       }
     }
     // This a workaround for statistics set only initially lost in the end

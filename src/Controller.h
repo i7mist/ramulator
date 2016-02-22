@@ -21,6 +21,7 @@
 #include "ALDRAM.h"
 #include "SALP.h"
 #include "TLDRAM.h"
+#include "WideIO2.h"
 
 using namespace std;
 
@@ -378,6 +379,9 @@ void Controller<ALDRAM>::update_temp(ALDRAM::Temp current_temperature);
 
 template <>
 void Controller<TLDRAM>::tick();
+
+template <>
+void Controller<WideIO2>::tick();
 
 } /*namespace ramulator*/
 

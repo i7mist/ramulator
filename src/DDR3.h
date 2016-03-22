@@ -129,6 +129,23 @@ public:
         bool sibling;
     }; 
     vector<TimingEntry> timing[int(Level::MAX)][int(Command::MAX)];
+    // {cl_id, <timing_entries for each level & cmd>}
+    map<int, vector<typename DDR3::TimingEntry>*> nRCD_per_cl;
+    map<int, vector<typename DDR3::TimingEntry>*> nRP_per_cl;
+    map<int, vector<typename DDR3::TimingEntry>*> nRC_per_cl;
+    vector<typename DDR3::TimingEntry> nRCD_timing_entries[3][int(DDR3::Level::MAX)][int(DDR3::Command::MAX)];
+    vector<typename DDR3::TimingEntry> nRP_timing_entries[2][int(DDR3::Level::MAX)][int(DDR3::Command::MAX)];
+    vector<typename DDR3::TimingEntry> nRC_timing_entries[2][int(DDR3::Level::MAX)][int(DDR3::Command::MAX)];
+
+    // These numbers are only for DDR3-1333！
+    // VL-DRAM
+    // RCD: 5, 7.5, 10 ns (3.33, 5, 6.67 cycles) -> (3, 5, 7)
+    // RP:  7.5, 10 ns (5, 6.67 cycles) (5, 7)
+    // RAS: 18 cycles
+    // nRC = nRAS + nRP: (23, 24.67 cycles) -> (23, 25)
+    int nRCD[3] = {3, 5, 7};
+    int nRP[2] = {5, 7};
+    int nRC[2] = {23, 25};
 
     /* Lambda */
     function<void(DRAM<DDR3>*, int)> lambda[int(Level::MAX)][int(Command::MAX)];
@@ -165,6 +182,7 @@ public:
         DDR3_800D,  DDR3_800E,
         DDR3_1066E, DDR3_1066F, DDR3_1066G,
         DDR3_1333G, DDR3_1333H,
+        DDR3_1333H_VLDRAM,
         DDR3_1600H, DDR3_1600J, DDR3_1600K,
         DDR3_1866K, DDR3_1866L,
         DDR3_2133L, DDR3_2133M,
@@ -193,6 +211,7 @@ public:
         {1066, (400.0/3)*4, (3/0.4)/4, 4, 4, 2,  8,  8,  8,  6, 20, 28, 4, 4,  8, 0, 0, 0, 4160, 3, 4, 13, 4, 0, 512},
         {1333, (400.0/3)*5, (3/0.4)/5, 4, 4, 2,  8,  8,  8,  7, 24, 32, 5, 5, 10, 0, 0, 0, 5200, 4, 4, 16, 5, 0, 512},
         {1333, (400.0/3)*5, (3/0.4)/5, 4, 4, 2,  9,  9,  9,  7, 24, 33, 5, 5, 10, 0, 0, 0, 5200, 4, 4, 16, 5, 0, 512},
+        {1333, (400.0/3)*5, (3/0.4)/5, 4, 4, 2,  9,  0,  7,  7, 18, 0, 5, 5, 10, 0, 0, 0, 5200, 4, 4, 16, 5, 0, 512},
         {1600, (400.0/3)*6, (3/0.4)/6, 4, 4, 2,  9,  9,  9,  8, 28, 37, 6, 6, 12, 0, 0, 0, 6240, 4, 5, 20, 5, 0, 512},
         {1600, (400.0/3)*6, (3/0.4)/6, 4, 4, 2, 10, 10, 10,  8, 28, 38, 6, 6, 12, 0, 0, 0, 6240, 4, 5, 20, 5, 0, 512},
         {1600, (400.0/3)*6, (3/0.4)/6, 4, 4, 2, 11, 11, 11,  8, 28, 39, 6, 6, 12, 0, 0, 0, 6240, 4, 5, 20, 5, 0, 512},

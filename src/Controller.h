@@ -16,7 +16,6 @@
 #include "Scheduler.h"
 #include "Statistics.h"
 
-#include "HMC.h"
 
 #include "ALDRAM.h"
 #include "SALP.h"
@@ -206,7 +205,7 @@ public:
             auto cmd = T::Command::PRE;
             vector<int> victim = rowpolicy->get_victim(cmd);
             if (!victim.empty()){
-                issue_cmd(cmd, victim);
+                issue_cmd(cmd, victim, -1);
             }
             return;  // nothing more to be done this cycle
         }
@@ -248,7 +247,10 @@ public:
 
         // issue command on behalf of request
         auto cmd = get_first_cmd(req);
-        issue_cmd(cmd, get_addr_vec(cmd, req));
+        // FIXME: We shouldn't assume cacheline size is 64B
+        int cl_id = (req->addr) >> 6;
+//         assert(cl_id >= 0);
+        issue_cmd(cmd, get_addr_vec(cmd, req), cl_id);
 
         // check whether this is the last command (which finishes the request)
         if (cmd != channel->spec->translate[int(req->type)])
@@ -335,10 +337,10 @@ private:
         return channel->decode(cmd, req->addr_vec.data());
     }
 
-    void issue_cmd(typename T::Command cmd, const vector<int>& addr_vec)
+    void issue_cmd(typename T::Command cmd, const vector<int>& addr_vec, int cl_id = -1)
     {
         assert(is_ready(cmd, addr_vec));
-        channel->update(cmd, addr_vec.data(), clk);
+        channel->update(cmd, addr_vec.data(), clk, cl_id);
         rowtable->update(cmd, addr_vec, clk);
         if (record_cmd_trace){
             // select rank

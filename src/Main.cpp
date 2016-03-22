@@ -2,9 +2,7 @@
 #include "Config.h"
 #include "Controller.h"
 #include "SpeedyController.h"
-#include "HMC_Controller.h"
 #include "Memory.h"
-#include "HMC_Memory.h"
 #include "DRAM.h"
 #include "Statistics.h"
 #include <algorithm>
@@ -27,7 +25,6 @@
 #include "WideIO.h"
 #include "WideIO2.h"
 #include "HBM.h"
-#include "HMC.h"
 #include "SALP.h"
 #include "ALDRAM.h"
 #include "TLDRAM.h"
@@ -202,30 +199,6 @@ void start_run(const Config& configs, T* spec, const vector<string>& files) {
   }
 }
 
-template<>
-void start_run<HMC>(const Config& configs, HMC* spec, const vector<string>& files) {
-  int V = spec->org_entry.count[int(HMC::Level::Vault)];
-  int S = configs.get_stacks();
-  int total_vault_number = V * S;
-  debug_hmc("total_vault_number: %d\n", total_vault_number);
-  std::vector<Controller<HMC>*> vault_ctrls;
-  for (int c = 0 ; c < total_vault_number ; ++c) {
-    DRAM<HMC>* vault = new DRAM<HMC>(spec, HMC::Level::Vault);
-    vault->id = c;
-    vault->regStats("");
-    Controller<HMC>* ctrl = new Controller<HMC>(configs, vault);
-    vault_ctrls.push_back(ctrl);
-  }
-  Memory<HMC, Controller> memory(configs, vault_ctrls);
-
-  assert(files.size() != 0);
-  if (configs["trace_type"] == "CPU") {
-    run_cputrace(configs, memory, files);
-  } else if (configs["trace_type"] == "DRAM") {
-    run_dramtrace(configs, memory, files[0]);
-  }
-}
-
 int main(int argc, const char *argv[])
 {
     po::options_description desc;
@@ -320,54 +293,8 @@ int main(int argc, const char *argv[])
     if (standard == "DDR3") {
       DDR3* ddr3 = new DDR3(configs["org"], configs["speed"]);
       start_run(configs, ddr3, files);
-    } else if (standard == "DDR4") {
-      DDR4* ddr4 = new DDR4(configs["org"], configs["speed"]);
-      start_run(configs, ddr4, files);
-    } else if (standard == "SALP-MASA") {
-      SALP* salp8 = new SALP(configs["org"], configs["speed"], "SALP-MASA", configs.get_subarrays());
-      start_run(configs, salp8, files);
-    } else if (standard == "LPDDR3") {
-      LPDDR3* lpddr3 = new LPDDR3(configs["org"], configs["speed"]);
-      start_run(configs, lpddr3, files);
-    } else if (standard == "LPDDR4") {
-      // total cap: 2GB, 1/2 of others
-      LPDDR4* lpddr4 = new LPDDR4(configs["org"], configs["speed"]);
-      start_run(configs, lpddr4, files);
-    } else if (standard == "GDDR5") {
-      GDDR5* gddr5 = new GDDR5(configs["org"], configs["speed"]);
-      start_run(configs, gddr5, files);
-    } else if (standard == "HBM") {
-      HBM* hbm = new HBM(configs["org"], configs["speed"]);
-      start_run(configs, hbm, files);
-    } else if (standard == "WideIO") {
-      // total cap: 1GB, 1/4 of others
-      WideIO* wio = new WideIO(configs["org"], configs["speed"]);
-      start_run(configs, wio, files);
-    } else if (standard == "WideIO2") {
-      // total cap: 2GB, 1/2 of others
-      WideIO2* wio2 = new WideIO2(configs["org"], configs["speed"], configs.get_channels());
-      if (configs.contains("extend_channel_width") &&
-          configs["extend_channel_width"] == "true") {
-        wio2->channel_width *= 2;
-      }
-      start_run(configs, wio2, files);
-    }
-    // Various refresh mechanisms
-      else if (standard == "DSARP") {
-      DSARP* dsddr3_dsarp = new DSARP(configs["org"], configs["speed"], DSARP::Type::DSARP, configs.get_subarrays());
-      start_run(configs, dsddr3_dsarp, files);
-    } else if (standard == "ALDRAM") {
-      ALDRAM* aldram = new ALDRAM(configs["org"], configs["speed"]);
-      start_run(configs, aldram, files);
-    } else if (standard == "TLDRAM") {
-      TLDRAM* tldram = new TLDRAM(configs["org"], configs["speed"], configs.get_subarrays());
-      start_run(configs, tldram, files);
-    } else if (standard == "HMC") {
-      HMC* hmc = new HMC(configs["org"], configs["speed"], configs["maxblock"],
-          configs["link_width"], configs["lane_speed"],
-          configs.get_int_value("source_mode_host_links"),
-          configs.get_int_value("payload_flits"));
-      start_run(configs, hmc, files);
+    } else {
+      assert(false);
     }
 
     cout << "Simulation done. Statistics written to " << stats_out << endl ;

@@ -5,12 +5,11 @@
 #include "DRAM.h"
 #include "Request.h"
 #include "Controller.h"
-#include "HMC_Controller.h"
 #include "SpeedyController.h"
 #include "Statistics.h"
+#include "DDR3.h"
 #include "GDDR5.h"
 #include "HBM.h"
-#include "HMC.h"
 #include "LPDDR3.h"
 #include "LPDDR4.h"
 #include "WideIO2.h"
@@ -100,6 +99,8 @@ protected:
 #endif
 
   long max_address;
+  int rcd_thresh_bin0 = 30, rcd_thresh_bin1 = 60; // 3 : 3 : 4
+  int rp_thresh_bin0 = 50; // 1 : 1
 public:
     enum class Type {
         ChRaBaRoCo,
@@ -607,6 +608,41 @@ public:
                         page_translation[target] = phys_page_to_read;
                         free_physical_pages[phys_page_to_read] = coreid;
                         --free_physical_pages_remaining;
+                    }
+                    // VL-DRAM: assign specific RCD, RP, RAS, RC for all cachelines that fall into this page.
+                    // FIXME: For consistency across our code base for this
+                    // feature, we assume cacheline size is 64B, which should be
+                    // fixed in the future.
+                    long pfn = page_translation[target] << 12;
+//                     puts("sweep all cachelines in current page:");
+                    for (long offset = 0 ; offset < (1<<12) ; offset += (1<<6)) {
+                      long addr = pfn | offset;
+                      int rand_RCD = lrand() % 100;
+                      int rand_RP = lrand() % 100;
+                      // TODO: Are these two streams of pseudo random number
+                      // conform with characteristics of the sample of two
+                      // independent random variables?
+                      int cl_id = addr >> 6;
+                      assert(cl_id >= 0);
+//                       printf("addr: %lx cl_id: %x\n", addr, cl_id);
+
+                      // RCD timing
+                      if (rand_RCD < rcd_thresh_bin0) { // 5ns
+                        spec->nRCD_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRCD_timing_entries[0];
+                      } else if (rand_RCD < rcd_thresh_bin1) { // 7.5ns
+                        spec->nRCD_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRCD_timing_entries[1];
+                      } else { // 10ns
+                        spec->nRCD_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRCD_timing_entries[2];
+                      }
+
+                      //RP timing -> RC timing
+                      if (rand_RP < rp_thresh_bin0) { // 7.5ns
+                        spec->nRP_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRP_timing_entries[0];
+                        spec->nRC_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRC_timing_entries[0];
+                      } else { // 10ns
+                        spec->nRP_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRP_timing_entries[1];
+                        spec->nRC_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRC_timing_entries[1];
+                      }
                     }
                 }
 

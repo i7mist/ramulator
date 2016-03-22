@@ -69,7 +69,7 @@ public:
     long get_next(typename T::Command cmd, const int* addr);
 
     // Update the timing/state of the tree, signifying that a command has been issued
-    void update(typename T::Command cmd, const int* addr, long clk);
+    void update(typename T::Command cmd, const int* addr, long clk, int cl_id);
     // Update statistics:
 
     // Update the number of requests it serves currently
@@ -118,7 +118,7 @@ private:
 
     // Helper Functions
     void update_state(typename T::Command cmd, const int* addr);
-    void update_timing(typename T::Command cmd, const int* addr, long clk);
+    void update_timing(typename T::Command cmd, const int* addr, long clk, int cl_id);
 }; /* class DRAM */
 
 
@@ -203,6 +203,18 @@ DRAM<T>::DRAM(T* spec, typename T::Level level) :
         int dist = 0;
         for (auto& t : timing[cmd])
             dist = max(dist, t.dist);
+        // VL-DRAM
+        for (auto& t : spec->nRCD_timing_entries[0][int(level)][cmd]) {
+            dist = max(dist, t.dist);
+        }
+
+        for (auto& t : spec->nRP_timing_entries[0][int(level)][cmd]) {
+            dist = max(dist, t.dist);
+        }
+
+        for (auto& t: spec->nRC_timing_entries[0][int(level)][cmd]) {
+            dist = max(dist, t.dist);
+        }
 
         if (dist)
             prev[cmd].resize(dist, -1); // initialize history
@@ -323,11 +335,11 @@ long DRAM<T>::get_next(typename T::Command cmd, const int* addr)
 
 // Update
 template <typename T>
-void DRAM<T>::update(typename T::Command cmd, const int* addr, long clk)
+void DRAM<T>::update(typename T::Command cmd, const int* addr, long clk, int cl_id)
 {
     cur_clk = clk;
     update_state(cmd, addr);
-    update_timing(cmd, addr, clk);
+    update_timing(cmd, addr, clk, cl_id);
 }
 
 
@@ -349,7 +361,7 @@ void DRAM<T>::update_state(typename T::Command cmd, const int* addr)
 
 // Update (Timing)
 template <typename T>
-void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk)
+void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk, int cl_id)
 {
     // I am not a target node: I am merely one of its siblings
     if (id != addr[int(level)]) {
@@ -394,6 +406,54 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk)
         }
     }
 
+    // VL-DRAM: specific timing for each cacheline, including RCD, RP, RAS, RC
+    // Only applicable for cmds that are not related with sibling timings.
+    // TODO some cmds don't access a certain cacheline (e.g. PREA, REF), so we should first filter those commands and add assertion to make sure specific timing parameters have been specified for this cacheline.
+    if (cl_id >= 0 && spec->nRCD_per_cl.count(cl_id)) {
+      // FIXME: 12 is the total command number of DDR3, shouldn't use magic number
+      auto& nRCD = spec->nRCD_per_cl[cl_id][int(level) * 12 + int(cmd)];
+      for (auto& t : nRCD) {
+        assert(!t.sibling); // sibling timing is not applicable here.
+
+        long past = prev[int(cmd)][t.dist-1];
+        if (past < 0)
+            continue; // not enough history
+
+        long future = past + t.val;
+        next[int(t.cmd)] = max(next[int(t.cmd)], future); // update future
+      }
+    }
+
+    if (cl_id >= 0 && spec->nRP_per_cl.count(cl_id)) {
+      // FIXME: 12 is the total command number of DDR3, shouldn't use magic number
+      auto& nRP = spec->nRP_per_cl[cl_id][int(level) * 12 + int(cmd)];
+      for (auto& t : nRP) {
+        assert(!t.sibling); // sibling timing is not applicable here.
+
+        long past = prev[int(cmd)][t.dist-1];
+        if (past < 0)
+            continue; // not enough history
+
+        long future = past + t.val;
+        next[int(t.cmd)] = max(next[int(t.cmd)], future); // update future
+      }
+    }
+
+    if (cl_id >= 0 && spec->nRC_per_cl.count(cl_id)) {
+      // FIXME: 12 is the total command number of DDR3, shouldn't use magic number
+      auto& nRC = spec->nRC_per_cl[cl_id][int(level) * 12 + int(cmd)];
+      for (auto& t : nRC) {
+        assert(!t.sibling); // sibling timing is not applicable here.
+
+        long past = prev[int(cmd)][t.dist-1];
+        if (past < 0)
+            continue; // not enough history
+
+        long future = past + t.val;
+        next[int(t.cmd)] = max(next[int(t.cmd)], future); // update future
+      }
+    }
+
     // Some commands have timings that are higher that their scope levels, thus
     // we do not stop at the cmd's scope level
     if (!children.size())
@@ -401,7 +461,7 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk)
 
     // recursively update *all* of my children
     for (auto child : children)
-        child->update_timing(cmd, addr, clk);
+        child->update_timing(cmd, addr, clk, cl_id);
 
 }
 

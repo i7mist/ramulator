@@ -31,6 +31,7 @@ map<string, enum DDR3::Speed> DDR3::speed_map = {
 DDR3::DDR3(Org org, Speed speed) :
     org_entry(org_table[int(org)]),
     speed_entry(speed_table[int(speed)]),
+    speed(speed),
     read_latency(speed_entry.nCL + speed_entry.nBL)
 {
     init_speed();
@@ -41,8 +42,8 @@ DDR3::DDR3(Org org, Speed speed) :
     init_timing();
 }
 
-DDR3::DDR3(const string& org_str, const string& speed_str) :
-    DDR3(org_map[org_str], speed_map[speed_str])
+DDR3::DDR3(const string& org_str, const string& speed) :
+    DDR3(org_map[org_str], speed_map[speed])
 {
 }
 
@@ -340,45 +341,60 @@ void DDR3::init_timing()
     t = timing[int(Level::Bank)];
 
     // CAS <-> RAS
-//     t[int(Command::ACT)].push_back({Command::RD, 1, s.nRCD});
-//     t[int(Command::ACT)].push_back({Command::RDA, 1, s.nRCD});
-//     t[int(Command::ACT)].push_back({Command::WR, 1, s.nRCD});
-//     t[int(Command::ACT)].push_back({Command::WRA, 1, s.nRCD});
-    nRCD_timing_entries[0][int(Level::Bank)][int(Command::ACT)].push_back({Command::RD, 1, nRCD[0]});
-    nRCD_timing_entries[1][int(Level::Bank)][int(Command::ACT)].push_back({Command::RD, 1, nRCD[1]});
-    nRCD_timing_entries[2][int(Level::Bank)][int(Command::ACT)].push_back({Command::RD, 1, nRCD[2]});
+    if (speed != Speed::DDR3_1333H_VLDRAM) {
+      t[int(Command::ACT)].push_back({Command::RD, 1, s.nRCD});
+      t[int(Command::ACT)].push_back({Command::RDA, 1, s.nRCD});
+      t[int(Command::ACT)].push_back({Command::WR, 1, s.nRCD});
+      t[int(Command::ACT)].push_back({Command::WRA, 1, s.nRCD});
+    } else {
+      nRCD_timing_entries[0][int(Level::Bank)][int(Command::ACT)].push_back({Command::RD, 1, nRCD[0]});
+      nRCD_timing_entries[1][int(Level::Bank)][int(Command::ACT)].push_back({Command::RD, 1, nRCD[1]});
+      nRCD_timing_entries[2][int(Level::Bank)][int(Command::ACT)].push_back({Command::RD, 1, nRCD[2]});
 
-    nRCD_timing_entries[0][int(Level::Bank)][int(Command::ACT)].push_back({Command::RDA, 1, nRCD[0]});
-    nRCD_timing_entries[1][int(Level::Bank)][int(Command::ACT)].push_back({Command::RDA, 1, nRCD[1]});
-    nRCD_timing_entries[2][int(Level::Bank)][int(Command::ACT)].push_back({Command::RDA, 1, nRCD[2]});
+      nRCD_timing_entries[0][int(Level::Bank)][int(Command::ACT)].push_back({Command::RDA, 1, nRCD[0]});
+      nRCD_timing_entries[1][int(Level::Bank)][int(Command::ACT)].push_back({Command::RDA, 1, nRCD[1]});
+      nRCD_timing_entries[2][int(Level::Bank)][int(Command::ACT)].push_back({Command::RDA, 1, nRCD[2]});
 
-    nRCD_timing_entries[0][int(Level::Bank)][int(Command::ACT)].push_back({Command::WR, 1, nRCD[0]});
-    nRCD_timing_entries[1][int(Level::Bank)][int(Command::ACT)].push_back({Command::WR, 1, nRCD[1]});
-    nRCD_timing_entries[2][int(Level::Bank)][int(Command::ACT)].push_back({Command::WR, 1, nRCD[2]});
+      nRCD_timing_entries[0][int(Level::Bank)][int(Command::ACT)].push_back({Command::WR, 1, nRCD[0]});
+      nRCD_timing_entries[1][int(Level::Bank)][int(Command::ACT)].push_back({Command::WR, 1, nRCD[1]});
+      nRCD_timing_entries[2][int(Level::Bank)][int(Command::ACT)].push_back({Command::WR, 1, nRCD[2]});
 
-    nRCD_timing_entries[0][int(Level::Bank)][int(Command::ACT)].push_back({Command::WRA, 1, nRCD[0]});
-    nRCD_timing_entries[1][int(Level::Bank)][int(Command::ACT)].push_back({Command::WRA, 1, nRCD[1]});
-    nRCD_timing_entries[2][int(Level::Bank)][int(Command::ACT)].push_back({Command::WRA, 1, nRCD[2]});
+      nRCD_timing_entries[0][int(Level::Bank)][int(Command::ACT)].push_back({Command::WRA, 1, nRCD[0]});
+      nRCD_timing_entries[1][int(Level::Bank)][int(Command::ACT)].push_back({Command::WRA, 1, nRCD[1]});
+      nRCD_timing_entries[2][int(Level::Bank)][int(Command::ACT)].push_back({Command::WRA, 1, nRCD[2]});
+    }
 
     t[int(Command::RD)].push_back({Command::PRE, 1, s.nRTP});
     t[int(Command::WR)].push_back({Command::PRE, 1, s.nCWL + s.nBL + s.nWR});
 
-//     t[int(Command::RDA)].push_back({Command::ACT, 1, s.nRTP + s.nRP});
-    nRP_timing_entries[0][int(Level::Bank)][int(Command::RDA)].push_back({Command::ACT, 1, s.nRTP + nRP[0]});
-    nRP_timing_entries[1][int(Level::Bank)][int(Command::RDA)].push_back({Command::ACT, 1, s.nRTP + nRP[1]});
+    if (speed != Speed::DDR3_1333H_VLDRAM) {
+      t[int(Command::RDA)].push_back({Command::ACT, 1, s.nRTP + s.nRP});
+    } else {
+      nRP_timing_entries[0][int(Level::Bank)][int(Command::RDA)].push_back({Command::ACT, 1, s.nRTP + nRP[0]});
+      nRP_timing_entries[1][int(Level::Bank)][int(Command::RDA)].push_back({Command::ACT, 1, s.nRTP + nRP[1]});
+    }
 
-//     t[int(Command::WRA)].push_back({Command::ACT, 1, s.nCWL + s.nBL + s.nWR + s.nRP});
-    nRP_timing_entries[0][int(Level::Bank)][int(Command::WRA)].push_back({Command::ACT, 1, s.nCWL + s.nBL + s.nWR + nRP[0]});
-    nRP_timing_entries[1][int(Level::Bank)][int(Command::WRA)].push_back({Command::ACT, 1, s.nCWL + s.nBL + s.nWR + nRP[1]});
+    if (speed != Speed::DDR3_1333H_VLDRAM) {
+      t[int(Command::WRA)].push_back({Command::ACT, 1, s.nCWL + s.nBL + s.nWR + s.nRP});
+    } else {
+      nRP_timing_entries[0][int(Level::Bank)][int(Command::WRA)].push_back({Command::ACT, 1, s.nCWL + s.nBL + s.nWR + nRP[0]});
+      nRP_timing_entries[1][int(Level::Bank)][int(Command::WRA)].push_back({Command::ACT, 1, s.nCWL + s.nBL + s.nWR + nRP[1]});
+    }
 
     // RAS <-> RAS
-//     t[int(Command::ACT)].push_back({Command::ACT, 1, s.nRC});
-    nRC_timing_entries[0][int(Level::Bank)][int(Command::ACT)].push_back({Command::ACT, 1, nRC[0]});
-    nRC_timing_entries[1][int(Level::Bank)][int(Command::ACT)].push_back({Command::ACT, 1, nRC[1]});
+    if (speed != Speed::DDR3_1333H_VLDRAM) {
+      t[int(Command::ACT)].push_back({Command::ACT, 1, s.nRC});
+    } else {
+      nRC_timing_entries[0][int(Level::Bank)][int(Command::ACT)].push_back({Command::ACT, 1, nRC[0]});
+      nRC_timing_entries[1][int(Level::Bank)][int(Command::ACT)].push_back({Command::ACT, 1, nRC[1]});
+    }
 
     t[int(Command::ACT)].push_back({Command::PRE, 1, s.nRAS});
 
-//     t[int(Command::PRE)].push_back({Command::ACT, 1, s.nRP});
-    nRP_timing_entries[0][int(Level::Bank)][int(Command::PRE)].push_back({Command::ACT, 1, nRP[0]});
-    nRP_timing_entries[1][int(Level::Bank)][int(Command::PRE)].push_back({Command::ACT, 1, nRP[1]});
+    if (speed != Speed::DDR3_1333H_VLDRAM) {
+      t[int(Command::PRE)].push_back({Command::ACT, 1, s.nRP});
+    } else {
+      nRP_timing_entries[0][int(Level::Bank)][int(Command::PRE)].push_back({Command::ACT, 1, nRP[0]});
+      nRP_timing_entries[1][int(Level::Bank)][int(Command::PRE)].push_back({Command::ACT, 1, nRP[1]});
+    }
 }

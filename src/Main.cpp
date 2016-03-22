@@ -291,6 +291,9 @@ int main(int argc, const char *argv[])
     configs.set_core_num(files.size());
 
     if (standard == "DDR3") {
+      if (configs["speed"].find("VLDRAM") != std::string::npos) {
+        configs.set("VLDRAM", "true");
+      }
       DDR3* ddr3 = new DDR3(configs["org"], configs["speed"]);
       start_run(configs, ddr3, files);
     } else {

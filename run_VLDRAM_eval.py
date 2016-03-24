@@ -43,18 +43,23 @@ workloads = [["437.leslie3d", "462.libquantum", "482.sphinx3", "437.leslie3d", "
           ["459.GemsFDTD", "471.omnetpp", "437.leslie3d", "470.lbm", "tpcc64", "tpch2", "433.milc", "450.soplex"],
           ["482.sphinx3", "tpch17", "482.sphinx3", "429.mcf", "470.lbm", "482.sphinx3", "462.libquantum", "459.GemsFDTD"]]
 
-ramulator_bin = "/Users/tianshi/backup-lol/tianshi-Workspace/ramulator/ramulator"
+base_dir = "/home/tianshi/tianshi-Workspace/ramulator"
+ramulator_bin = base_dir + "/" + "ramulator"
 
-if not len(sys.argv) == 7:
-  print "python run_spec.py trace_dir output_dir config_dir workloadid DRAM [multicore|single-threaded]"
+if not len(sys.argv) >= 7:
+  print "python run_spec.py trace_dir output_dir config_dir workloadid DRAM [multicore|single-threaded] rcd_thresh_bin0 rcd_thresh_bin1 rp_thresh_bin0"
   sys.exit(0)
 
+if len(sys.argv) == 10:
+  rp_thresh_bin0 = sys.argv[9]
+  rcd_thresh_bin1 = sys.argv[8]
+  rcd_thresh_bin0 = sys.argv[7]
 option = sys.argv[6]
 DRAM = sys.argv[5]
 workload_id = int(sys.argv[4])
-config_dir = sys.argv[3]
-output_dir = sys.argv[2]
-trace_dir = sys.argv[1]
+config_dir = base_dir + "/" + sys.argv[3]
+output_dir = base_dir + "/" + sys.argv[2]
+trace_dir = base_dir + "/" + sys.argv[1]
 
 if option == "multicore":
   output_dir += "/workload" + str(workload_id)
@@ -71,9 +76,16 @@ config = config_dir + "/" + DRAM + "-config.cfg"
 if option == "multicore":
   traces = [trace_dir + "/" + t for t in workloads[workload_id]]
 
-  print " ".join([ramulator_bin, "--config", config, "--mode", "cpu", "--stats", output, "--trace"] + traces)
-  call([ramulator_bin, "--config", config, "--mode", "cpu", "--stats", output, "--trace"] + traces)
+  cmd_items = [ramulator_bin, "--config", config, "--mode", "cpu", "--stats", output, "--trace"] + traces
+  if "VLDRAM" in DRAM:
+    cmd_items += ["--rcd_thresh_bin0", str(rcd_thresh_bin0), "--rcd_thresh_bin1", str(rcd_thresh_bin1), "--rp_thresh_bin0", str(rp_thresh_bin0)]
+  print " ".join(cmd_items)
+  call(cmd_items)
+
 elif option == "single-threaded":
   trace = trace_dir + "/" + single_threaded[workload_id]
-  print " ".join([ramulator_bin, "--config", config, "--mode", "cpu", "--stats", output, "--trace", trace])
-  call([ramulator_bin, "--config", config, "--mode", "cpu", "--stats", output, "--trace", trace])
+  cmd_items = [ramulator_bin, "--config", config, "--mode", "cpu", "--stats", output, "--trace", trace]
+  if "VLDRAM" in DRAM:
+    cmd_items += ["--rcd_thresh_bin0", str(rcd_thresh_bin0), "--rcd_thresh_bin1", str(rcd_thresh_bin1), "--rp_thresh_bin0", str(rp_thresh_bin0)]
+  print " ".join(cmd_items)
+  call(cmd_items)

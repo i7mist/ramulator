@@ -130,9 +130,8 @@ public:
     }; 
     vector<TimingEntry> timing[int(Level::MAX)][int(Command::MAX)];
     // {cl_id, <timing_entries for each level & cmd>}
-    map<int, vector<typename DDR3::TimingEntry>*> nRCD_per_cl;
-    map<int, vector<typename DDR3::TimingEntry>*> nRP_per_cl;
-    map<int, vector<typename DDR3::TimingEntry>*> nRC_per_cl;
+    vector<int8_t> nRCD_per_cl;
+    vector<int8_t> nRP_RC_per_cl;
     vector<typename DDR3::TimingEntry> nRCD_timing_entries[3][int(DDR3::Level::MAX)][int(DDR3::Command::MAX)];
     vector<typename DDR3::TimingEntry> nRP_timing_entries[2][int(DDR3::Level::MAX)][int(DDR3::Command::MAX)];
     vector<typename DDR3::TimingEntry> nRC_timing_entries[2][int(DDR3::Level::MAX)][int(DDR3::Command::MAX)];

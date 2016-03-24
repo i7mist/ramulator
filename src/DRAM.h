@@ -409,9 +409,10 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk, 
     // VL-DRAM: specific timing for each cacheline, including RCD, RP, RAS, RC
     // Only applicable for cmds that are not related with sibling timings.
     // TODO some cmds don't access a certain cacheline (e.g. PREA, REF), so we should first filter those commands and add assertion to make sure specific timing parameters have been specified for this cacheline.
-    if (cl_id >= 0 && spec->nRCD_per_cl.count(cl_id)) {
-      // FIXME: 12 is the total command number of DDR3, shouldn't use magic number
-      auto& nRCD = spec->nRCD_per_cl[cl_id][int(level) * 12 + int(cmd)];
+    if (cl_id >= 0 && cl_id < spec->nRCD_per_cl.size()
+        && spec->nRCD_per_cl[cl_id] != static_cast<int8_t>(-1)) {
+      int8_t timing_id = spec->nRCD_per_cl[cl_id];
+      auto& nRCD = spec->nRCD_timing_entries[timing_id][int(level)][int(cmd)];
       for (auto& t : nRCD) {
         assert(!t.sibling); // sibling timing is not applicable here.
 
@@ -424,9 +425,10 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk, 
       }
     }
 
-    if (cl_id >= 0 && spec->nRP_per_cl.count(cl_id)) {
-      // FIXME: 12 is the total command number of DDR3, shouldn't use magic number
-      auto& nRP = spec->nRP_per_cl[cl_id][int(level) * 12 + int(cmd)];
+    if (cl_id >= 0 && cl_id < spec->nRP_RC_per_cl.size()
+        && spec->nRP_RC_per_cl[cl_id] != static_cast<int8_t>(-1)) {
+      int8_t timing_id = spec->nRP_RC_per_cl[cl_id];
+      auto& nRP = spec->nRP_timing_entries[timing_id][int(level)][int(cmd)];
       for (auto& t : nRP) {
         assert(!t.sibling); // sibling timing is not applicable here.
 
@@ -439,9 +441,10 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk, 
       }
     }
 
-    if (cl_id >= 0 && spec->nRC_per_cl.count(cl_id)) {
-      // FIXME: 12 is the total command number of DDR3, shouldn't use magic number
-      auto& nRC = spec->nRC_per_cl[cl_id][int(level) * 12 + int(cmd)];
+    if (cl_id >= 0 && cl_id < spec->nRP_RC_per_cl.size()
+        && spec->nRP_RC_per_cl[cl_id] != static_cast<int8_t>(-1)) {
+      int8_t timing_id = spec->nRP_RC_per_cl[cl_id];
+      auto& nRC = spec->nRC_timing_entries[timing_id][int(level)][int(cmd)];
       for (auto& t : nRC) {
         assert(!t.sibling); // sibling timing is not applicable here.
 

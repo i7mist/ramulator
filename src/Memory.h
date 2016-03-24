@@ -187,6 +187,11 @@ public:
 
         cacheline_size = configs.get_cacheline_size();
 
+        // FIXME: shouldn't assume cacheline_size == 64
+        assert(cacheline_size == 64);
+        spec->nRCD_per_cl.resize(max_address / cacheline_size, int8_t(-1));
+        spec->nRP_RC_per_cl.resize(max_address / cacheline_size, int8_t(-1));
+
         // regStats
 
         dram_capacity
@@ -659,29 +664,35 @@ public:
                         // independent random variables?
                         int cl_id = addr >> 6;
                         assert(cl_id >= 0);
+                        if (cl_id == 0) {
+                          printf("addr %lx, cl_id %d\n", addr, cl_id);
+                        }
   //                       printf("addr: %lx cl_id: %x\n", addr, cl_id);
 
                         // RCD timing
                         if (rand_RCD < rcd_thresh_bin0) { // 5ns
                           trcd_5_count++;
-                          spec->nRCD_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRCD_timing_entries[0];
+                          spec->nRCD_per_cl[cl_id] = 0;
                         } else if (rand_RCD < rcd_thresh_bin1) { // 7.5ns
                           trcd_7_5_count++;
-                          spec->nRCD_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRCD_timing_entries[1];
+                          spec->nRCD_per_cl[cl_id] = 1;
                         } else { // 10ns
                           trcd_10_count++;
-                          spec->nRCD_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRCD_timing_entries[2];
+                          spec->nRCD_per_cl[cl_id] = 2;
                         }
 
                         //RP timing -> RC timing
                         if (rand_RP < rp_thresh_bin0) { // 7.5ns
                           trp_7_5_count++;
-                          spec->nRP_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRP_timing_entries[0];
-                          spec->nRC_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRC_timing_entries[0];
+                          spec->nRP_RC_per_cl[cl_id] = 0;
                         } else { // 10ns
                           trp_10_count++;
-                          spec->nRP_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRP_timing_entries[1];
-                          spec->nRC_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRC_timing_entries[1];
+                          spec->nRP_RC_per_cl[cl_id] = 1;
+                        }
+
+                        if (cl_id == 0) {
+                          printf("spec->nRCD_per_cl[cl_id] %d", spec->nRCD_per_cl[cl_id]);
+                          printf("spec->nRP_RC_per_cl[cl_id] %d\n", spec->nRP_RC_per_cl[cl_id]);
                         }
                       }
                     }

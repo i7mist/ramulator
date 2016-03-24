@@ -409,7 +409,7 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk, 
     // VL-DRAM: specific timing for each cacheline, including RCD, RP, RAS, RC
     // Only applicable for cmds that are not related with sibling timings.
     // TODO some cmds don't access a certain cacheline (e.g. PREA, REF), so we should first filter those commands and add assertion to make sure specific timing parameters have been specified for this cacheline.
-    if (cl_id >= 0 && cl_id < spec->nRCD_per_cl.size()
+    if (cl_id >= 0 && cl_id < (int)spec->nRCD_per_cl.size()
         && spec->nRCD_per_cl[cl_id] != static_cast<int8_t>(-1)) {
       int8_t timing_id = spec->nRCD_per_cl[cl_id];
       auto& nRCD = spec->nRCD_timing_entries[timing_id][int(level)][int(cmd)];
@@ -425,7 +425,7 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk, 
       }
     }
 
-    if (cl_id >= 0 && cl_id < spec->nRP_RC_per_cl.size()
+    if (cl_id >= 0 && cl_id < (int)spec->nRP_RC_per_cl.size()
         && spec->nRP_RC_per_cl[cl_id] != static_cast<int8_t>(-1)) {
       int8_t timing_id = spec->nRP_RC_per_cl[cl_id];
       auto& nRP = spec->nRP_timing_entries[timing_id][int(level)][int(cmd)];
@@ -441,7 +441,7 @@ void DRAM<T>::update_timing(typename T::Command cmd, const int* addr, long clk, 
       }
     }
 
-    if (cl_id >= 0 && cl_id < spec->nRP_RC_per_cl.size()
+    if (cl_id >= 0 && cl_id < (int)spec->nRP_RC_per_cl.size()
         && spec->nRP_RC_per_cl[cl_id] != static_cast<int8_t>(-1)) {
       int8_t timing_id = spec->nRP_RC_per_cl[cl_id];
       auto& nRC = spec->nRC_timing_entries[timing_id][int(level)][int(cmd)];

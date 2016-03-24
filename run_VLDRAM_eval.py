@@ -43,17 +43,21 @@ workloads = [["437.leslie3d", "462.libquantum", "482.sphinx3", "437.leslie3d", "
           ["459.GemsFDTD", "471.omnetpp", "437.leslie3d", "470.lbm", "tpcc64", "tpch2", "433.milc", "450.soplex"],
           ["482.sphinx3", "tpch17", "482.sphinx3", "429.mcf", "470.lbm", "482.sphinx3", "462.libquantum", "459.GemsFDTD"]]
 
+timing_thresh_groups = ["945 9900 9900", "25 1206 1300", "220 9330 7400", "0 9900 9900", "0 7200 1300", "0 0 0", "0 9900 9900", "0 1206 1300", "0 9330 7400"]
+
 base_dir = "/home/tianshi/tianshi-Workspace/ramulator"
 ramulator_bin = base_dir + "/" + "ramulator"
 
 if not len(sys.argv) >= 7:
-  print "python run_spec.py trace_dir output_dir config_dir workloadid DRAM [multicore|single-threaded] rcd_thresh_bin0 rcd_thresh_bin1 rp_thresh_bin0"
+  print "python run_spec.py trace_dir output_dir config_dir workloadid DRAM [multicore|single-threaded] timing_group"
   sys.exit(0)
 
-if len(sys.argv) == 10:
-  rp_thresh_bin0 = sys.argv[9]
-  rcd_thresh_bin1 = sys.argv[8]
-  rcd_thresh_bin0 = sys.argv[7]
+timing_group_id = int(sys.argv[7])
+timing_items = timing_thresh_groups[timing_group_id].split(" ")
+if len(sys.argv) == 8:
+  rcd_thresh_bin0 = timing_items[0]
+  rcd_thresh_bin1 = timing_items[1]
+  rp_thresh_bin0 = timing_items[2]
 option = sys.argv[6]
 DRAM = sys.argv[5]
 workload_id = int(sys.argv[4])
@@ -62,6 +66,8 @@ output_dir = base_dir + "/" + sys.argv[2]
 trace_dir = base_dir + "/" + sys.argv[1]
 
 if option == "multicore":
+  if "VLDRAM" in DRAM:
+    output_dir += "/timing" + str(timing_group_id)
   output_dir += "/workload" + str(workload_id)
   print output_dir
 else:

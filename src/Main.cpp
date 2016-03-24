@@ -216,6 +216,9 @@ int main(int argc, const char *argv[])
       ("cpu-frequency", po::value<string>(), "define CPU frequency.")
       ("translation", po::value<string>(), "translation mode, selected from: None, Random")
       ("org", po::value<string>(), "specify DRAM organization")
+      ("rcd_thresh_bin0", po::value<string>(), "rcd_thresh_bin0")
+      ("rcd_thresh_bin1", po::value<string>(), "rcd_thresh_bin1")
+      ("rp_thresh_bin0", po::value<string>(), "rp_thresh_bin0")
       ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -254,6 +257,15 @@ int main(int argc, const char *argv[])
     }
     if (vm.count("org")) {
       configs.set("org", vm["org"].as<string>());
+    }
+    if (vm.count("rcd_thresh_bin0")) {
+      configs.set("rcd_thresh_bin0", vm["rcd_thresh_bin0"].as<string>());
+    }
+    if (vm.count("rcd_thresh_bin1")) {
+      configs.set("rcd_thresh_bin1", vm["rcd_thresh_bin1"].as<string>());
+    }
+    if (vm.count("rp_thresh_bin0")) {
+      configs.set("rp_thresh_bin0", vm["rp_thresh_bin0"].as<string>());
     }
 
     const std::string& standard = configs["standard"];

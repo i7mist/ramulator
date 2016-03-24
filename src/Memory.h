@@ -100,8 +100,13 @@ protected:
 
   long max_address;
   // VL-DRAM
-  int rcd_thresh_bin0 = 30, rcd_thresh_bin1 = 60; // 3 : 3 : 4
-  int rp_thresh_bin0 = 50; // 1 : 1
+  ScalarStat trcd_5_count;
+  ScalarStat trcd_7_5_count;
+  ScalarStat trcd_10_count;
+  ScalarStat trp_7_5_count;
+  ScalarStat trp_10_count;
+  int rcd_thresh_bin0 = 3000, rcd_thresh_bin1 = 6000; // 3 : 3 : 4
+  int rp_thresh_bin0 = 5000; // 1 : 1
   bool VLDRAM_enabled = false;
 public:
     enum class Type {
@@ -139,9 +144,9 @@ public:
     {
         // VL-DRAM
         if (configs["VLDRAM"] == "true") {
-          rcd_thresh_bin0 = 30; // configs.get_int_value("rcd_thresh_bin0");
-          rcd_thresh_bin1 = 60; // configs.get_int_value("rcd_thresh_bin1"); // 3 : 3 : 4
-          rp_thresh_bin0 = 50; //configs.get_int_value("rp_thresh_bin0"); // 1 : 1
+          rcd_thresh_bin0 = configs.get_int_value("rcd_thresh_bin0");
+          rcd_thresh_bin1 = configs.get_int_value("rcd_thresh_bin1"); // 3 : 3 : 4
+          rp_thresh_bin0 = configs.get_int_value("rp_thresh_bin0"); // 1 : 1
           VLDRAM_enabled = true;
         }
 
@@ -437,6 +442,26 @@ public:
             .desc("record write conflict for this core when it reaches request limit or to the end")
             ;
 #endif
+        trcd_5_count
+            .name("tcd_5_count")
+            .precision(0)
+            ;
+        trcd_7_5_count
+            .name("trcd_7_5_count")
+            .precision(0)
+            ;
+        trcd_10_count
+            .name("trcd_10_count")
+            .precision(0)
+            ;
+        trp_7_5_count
+            .name("trp_7_5_count")
+            .precision(0)
+            ;
+        trp_10_count
+            .name("trp_10_count")
+            .precision(0)
+            ;
 
         for (auto ctrl : ctrls) {
           ctrl->read_transaction_bytes = &read_transaction_bytes;
@@ -627,8 +652,8 @@ public:
   //                     puts("sweep all cachelines in current page:");
                       for (long offset = 0 ; offset < (1<<12) ; offset += (1<<6)) {
                         long addr = pfn | offset;
-                        int rand_RCD = lrand() % 100;
-                        int rand_RP = lrand() % 100;
+                        int rand_RCD = lrand() % 10000;
+                        int rand_RP = lrand() % 10000;
                         // TODO: Are these two streams of pseudo random number
                         // conform with characteristics of the sample of two
                         // independent random variables?
@@ -638,18 +663,23 @@ public:
 
                         // RCD timing
                         if (rand_RCD < rcd_thresh_bin0) { // 5ns
+                          trcd_5_count++;
                           spec->nRCD_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRCD_timing_entries[0];
                         } else if (rand_RCD < rcd_thresh_bin1) { // 7.5ns
+                          trcd_7_5_count++;
                           spec->nRCD_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRCD_timing_entries[1];
                         } else { // 10ns
+                          trcd_10_count++;
                           spec->nRCD_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRCD_timing_entries[2];
                         }
 
                         //RP timing -> RC timing
                         if (rand_RP < rp_thresh_bin0) { // 7.5ns
+                          trp_7_5_count++;
                           spec->nRP_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRP_timing_entries[0];
                           spec->nRC_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRC_timing_entries[0];
                         } else { // 10ns
+                          trp_10_count++;
                           spec->nRP_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRP_timing_entries[1];
                           spec->nRC_per_cl[cl_id] = (vector<typename DDR3::TimingEntry>*)spec->nRC_timing_entries[1];
                         }

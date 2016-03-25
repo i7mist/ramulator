@@ -18,11 +18,12 @@ namespace ramulator
 
 class Trace {
 public:
-    Trace(const string& trace_fname);
+    Trace(const Config& configs, const string& trace_fname);
     // trace file format 1:
     // [# of bubbles(non-mem instructions)] [read address(dec or hex)] <optional: write address(evicted cacheline)>
     bool get_unfiltered_request(long& bubble_cnt, long& req_addr, Request::Type& req_type);
     bool get_filtered_request(long& bubble_cnt, long& req_addr, Request::Type& req_type);
+    bool get_rowclone_request(long& bubble_cnt, long& req_addr, Request::Type& req_type); // traces are unfiltered
     // trace file format 2:
     // [address(hex)] [R/W]
     bool get_dramtrace_request(long& req_addr, Request::Type& req_type);
@@ -30,6 +31,8 @@ public:
 private:
     std::ifstream file;
     std::string trace_name;
+    // configured by `configs`
+    int cacheline_size;
 };
 
 
@@ -95,6 +98,7 @@ public:
 private:
     Trace trace;
     Window window;
+    bool rowclone_trace = false;
 
     long bubble_cnt;
     long req_addr = -1;

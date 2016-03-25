@@ -117,7 +117,7 @@ Core::Core(const Config& configs, int coreid,
     Cache* llc, std::shared_ptr<CacheSystem> cachesys, MemoryBase& memory)
     : id(coreid), no_core_caches(!configs.has_core_caches()),
     no_shared_cache(!configs.has_l3_cache()),
-    llc(llc), trace(trace_fname), memory(memory)
+    llc(llc), trace(configs, trace_fname), memory(memory)
 {
   // Build cache hierarchy
   if (no_core_caches) {
@@ -137,7 +137,12 @@ Core::Core(const Config& configs, int coreid,
     }
     caches[1]->concatlower(caches[0].get());
   }
-  if (no_core_caches) {
+  if (configs["rowclone-trace"] == "true") {
+    rowclone_trace = true;
+    more_reqs = trace.get_rowclone_request(
+        bubble_cnt, req_addr, req_type);
+    req_addr = memory.page_allocator(req_addr, id);
+  } else if (no_core_caches) {
     more_reqs = trace.get_filtered_request(
         bubble_cnt, req_addr, req_type);
     req_addr = memory.page_allocator(req_addr, id);
@@ -231,7 +236,13 @@ void Core::tick()
       reached_limit = true;
     }
 
-    if (no_core_caches) {
+    if (rowclone_trace) {
+      more_reqs = trace.get_rowclone_request(
+          bubble_cnt, req_addr, req_type);
+      if (req_addr != -1) {
+        req_addr = memory.page_allocator(req_addr, id);
+      }
+    } else if (no_core_caches) {
       more_reqs = trace.get_filtered_request(
           bubble_cnt, req_addr, req_type);
       if (req_addr != -1) {
@@ -329,12 +340,13 @@ void Window::set_ready(long addr, int mask)
 
 
 
-Trace::Trace(const string& trace_fname) : file(trace_fname), trace_name(trace_fname)
+Trace::Trace(const Config& configs, const string& trace_fname) : file(trace_fname), trace_name(trace_fname)
 {
     if (!file.good()) {
         std::cerr << "Bad trace file: " << trace_fname << std::endl;
         exit(1);
     }
+    cacheline_size = configs.get_cacheline_size();
 }
 
 bool Trace::get_unfiltered_request(long& bubble_cnt, long& req_addr, Request::Type& req_type)
@@ -397,6 +409,134 @@ bool Trace::get_filtered_request(long& bubble_cnt, long& req_addr, Request::Type
         write_addr = stoul(line.substr(pos), NULL, 0);
     }
     return true;
+}
+
+bool Trace::get_rowclone_request(long& bubble_cnt, long& req_addr, Request::Type& req_type) {
+  static int line_num = 0;
+  static bool has_write = false;
+  static long write_addr;
+
+  static bool is_copy = false;
+  static bool is_read;
+  static long copy_src_addr;
+  static long copy_dst_addr;
+  static int copy_size;
+  static int copy_cur_cl;
+
+  static bool is_set = false;
+  static long set_addr;
+  static int set_size;
+  static int set_cur_cl;
+
+  // FIXME: assume no eviction
+  if (is_set) {
+    bubble_cnt = 1;
+    req_addr = set_addr;
+    req_type = Request::Type::READ;
+    set_cur_cl++;
+    set_addr += cacheline_size;
+    if ((set_cur_cl * cacheline_size) >= set_size) {
+      is_set = false;
+    }
+    return true;
+  } else if (is_copy) {
+    bubble_cnt = 1;
+    if (is_read) { // if it's a read from src
+      req_addr = copy_src_addr;
+      req_type = Request::Type::READ;
+      copy_src_addr += cacheline_size;
+      is_read = false;
+    } else { // if it's a write to dst
+      req_addr = copy_dst_addr;
+      req_type = Request::Type::READ; // first read the data into cache before w
+      copy_dst_addr += cacheline_size;
+      copy_cur_cl++;
+      is_read = true;
+    }
+    if ((copy_cur_cl * cacheline_size) >= copy_size) {
+      is_copy = false;
+    }
+    return true;
+  } else if (has_write) {
+    bubble_cnt = 0;
+    req_addr = write_addr;
+    req_type = Request::Type::WRITE;
+    has_write = false;
+    return true;
+  }
+  string line;
+  getline(file, line);
+  line_num ++;
+  if (file.eof() || line.size() == 0) {
+    file.clear();
+    file.seekg(0, file.beg);
+    has_write = false;
+    is_copy = false;
+    is_set = false;
+    line_num = 0;
+    return false;
+  }
+  size_t pos = 1, end;
+  char type = line[0];
+  switch(int(type)) {
+    case 'R':
+      pos = line.find_first_not_of(' ', pos);
+      req_addr = stoul(line.substr(pos), &end, 16);
+      req_type = Request::Type::READ;
+
+      pos = line.find_first_not_of(' ', pos+end);
+      write_addr = stoul(line.substr(pos), &end, 16);
+      if (write_addr != 0) {
+        has_write = true;
+      }
+
+      pos = line.find_first_not_of(' ', pos+end);
+      bubble_cnt = stoul(line.substr(pos), &end, 10);
+      return true;
+    break;
+    case 'C':
+      // C dst src size bubble_cnt
+      pos = line.find_first_not_of(' ', pos);
+      copy_dst_addr = stoul(line.substr(pos), &end, 16);
+
+      pos = line.find_first_not_of(' ', pos+end);
+      copy_src_addr = stoul(line.substr(pos), &end, 16);
+
+      pos = line.find_first_not_of(' ', pos+end);
+      copy_size = stoul(line.substr(pos), &end, 10);
+
+      bubble_cnt = 1;
+
+      req_addr = copy_src_addr;
+      req_type = Request::Type::READ;
+      copy_cur_cl = 0;
+      copy_src_addr += cacheline_size;
+
+      is_copy = true;
+      is_read = false;
+      return true;
+    case 'S':
+      pos = line.find_first_not_of(' ', pos);
+      req_addr = stoul(line.substr(pos), &end, 16);
+      req_type = Request::Type::READ;
+
+      pos = line.find_first_not_of(' ', pos+end);
+      write_addr = stoul(line.substr(pos), &end, 16);
+      assert(write_addr == 0);
+
+      pos = line.find_first_not_of(' ', pos+end);
+      set_size = stoul(line.substr(pos), &end, 10);
+
+      bubble_cnt = 1;
+
+      set_cur_cl = 1;
+      set_addr = req_addr + cacheline_size;
+
+      is_set = true;
+      return true;
+    break;
+    default: assert(false);
+  }
 }
 
 bool Trace::get_dramtrace_request(long& req_addr, Request::Type& req_type)

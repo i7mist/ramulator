@@ -76,7 +76,7 @@ template<typename T>
 void run_dramtrace(const Config& configs, Memory<T, Controller>& memory, const string& tracename) {
 
     /* initialize DRAM trace */
-    Trace trace(tracename);
+    Trace trace(configs, tracename);
 
     /* run simulation */
     bool stall = false, end = false;
@@ -243,6 +243,7 @@ int main(int argc, const char *argv[])
       ("cpu-frequency", po::value<string>(), "define CPU frequency.")
       ("translation", po::value<string>(), "translation mode, selected from: None, Random")
       ("org", po::value<string>(), "specify DRAM organization")
+      ("rowclone-trace", po::value<string>(), "use rowclone trace format")
       ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -281,6 +282,9 @@ int main(int argc, const char *argv[])
     }
     if (vm.count("org")) {
       configs.set("org", vm["org"].as<string>());
+    }
+    if (vm.count("rowclone-trace")) {
+      configs.set("rowclone-trace", vm["rowclone-trace"].as<string>());
     }
 
     const std::string& standard = configs["standard"];

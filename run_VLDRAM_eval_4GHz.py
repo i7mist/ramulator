@@ -43,7 +43,7 @@ workloads = [["437.leslie3d", "462.libquantum", "482.sphinx3", "437.leslie3d", "
           ["459.GemsFDTD", "471.omnetpp", "437.leslie3d", "470.lbm", "tpcc64", "tpch2", "433.milc", "450.soplex"],
           ["482.sphinx3", "tpch17", "482.sphinx3", "429.mcf", "470.lbm", "482.sphinx3", "462.libquantum", "459.GemsFDTD"]]
 
-timing_thresh_groups = ["945 9900 9900", "25 1206 1300", "220 9330 7400", "0 9900 9900", "0 7200 1300", "0 0 0", "0 9900 9900", "0 1206 1300", "0 9330 7400", "100 100 100", "0 100 100"]
+timing_thresh_groups = ["945 9900 9900", "25 1206 1300", "220 9330 7400", "0 9900 9900", "0 7200 1300", "0 0 0", "0 9900 9900", "0 1206 1300", "0 9330 7400", "10000 10000 10000", "0 10000 10000"]
 
 base_dir = "/home/tianshi/tianshi-Workspace/ramulator"
 ramulator_bin = base_dir + "/" + "ramulator"
@@ -52,8 +52,9 @@ if not len(sys.argv) >= 7:
   print "python run_spec.py trace_dir output_dir config_dir workloadid DRAM [multicore|single-threaded] timing_group"
   sys.exit(0)
 
-timing_group_id = int(sys.argv[7])
-timing_items = timing_thresh_groups[timing_group_id].split(" ")
+if len(sys.argv) > 7:
+  timing_group_id = int(sys.argv[7])
+  timing_items = timing_thresh_groups[timing_group_id].split(" ")
 if len(sys.argv) == 8:
   rcd_thresh_bin0 = timing_items[0]
   rcd_thresh_bin1 = timing_items[1]
@@ -82,7 +83,7 @@ config = config_dir + "/" + DRAM + "-config.cfg"
 if option == "multicore":
   traces = [trace_dir + "/" + t for t in workloads[workload_id]]
 
-  cmd_items = [ramulator_bin, "--config", config, "--mode", "cpu", "--stats", output, "--trace"] + traces
+  cmd_items = [ramulator_bin, "--config", config, "--mode", "cpu", "--cpu-frequency", "4000", "--stats", output, "--trace"] + traces
   if "VLDRAM" in DRAM:
     cmd_items += ["--rcd_thresh_bin0", str(rcd_thresh_bin0), "--rcd_thresh_bin1", str(rcd_thresh_bin1), "--rp_thresh_bin0", str(rp_thresh_bin0)]
   print " ".join(cmd_items)
@@ -90,7 +91,7 @@ if option == "multicore":
 
 elif option == "single-threaded":
   trace = trace_dir + "/" + single_threaded[workload_id]
-  cmd_items = [ramulator_bin, "--config", config, "--mode", "cpu", "--stats", output, "--trace", trace]
+  cmd_items = [ramulator_bin, "--config", config, "--mode", "cpu", "--cpu-frequency", "4000", "--stats", output, "--trace", trace]
   if "VLDRAM" in DRAM:
     cmd_items += ["--rcd_thresh_bin0", str(rcd_thresh_bin0), "--rcd_thresh_bin1", str(rcd_thresh_bin1), "--rp_thresh_bin0", str(rp_thresh_bin0)]
   print " ".join(cmd_items)
